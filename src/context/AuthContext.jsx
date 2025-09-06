@@ -1,43 +1,59 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
+import { jwtDecode } from "jwt-decode";
 
-// Authentication context create karo
 const AuthContext = createContext();
 
-// Custom hook for easy access
 export function useAuth() {
   return useContext(AuthContext);
 }
 
-// Provider component jo pure app ko wrap karega
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // App load hone par localStorage se user info fetch karenge (agar pehle saved ho)
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("user");
       if (storedUser) {
-        setUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+
+        // 🔑 Decode token se id le aao
+        if (parsedUser.token) {
+          const decoded = jwtDecode(parsedUser.token);
+          parsedUser._id = decoded.id; // backend me tum `id` sign kar rahe ho
+        }
+
+        setUser(parsedUser);
       }
     } catch (e) {
       console.error("Failed to parse user from localStorage", e);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
-  // Login function: user object set karo aur localStorage me store karo
   const login = (userData) => {
-    setUser(userData);
+    // token decode karo jab login hota hai
+    if (userData.token) {
+      const decoded = jwtDecode(userData.token);
+      userData._id = decoded.id;
+    }
+
     localStorage.setItem("user", JSON.stringify(userData));
+    setUser(userData);
   };
 
-  // Logout function: user clear karo aur localStorage se hatao
   const logout = () => {
-    setUser(null);
     localStorage.removeItem("user");
+    setUser(null);
   };
 
   const value = {
     user,
+    loading,
+    isAuthenticated: !!user,
     login,
     logout,
   };

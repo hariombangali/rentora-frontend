@@ -108,6 +108,39 @@ export default function AllProperties() {
     }
   }
 
+  async function toggleFeatured(id, currentFeatured, isApproved) {
+  if (!isApproved) {
+    alert("Only approved properties can be featured.");
+    return;
+  }
+  updateProcessing(id, true);
+  setError("");
+  try {
+    const token = localStorage.getItem("token");
+    await API.put(
+      `/admin/properties/${id}/feature`,
+      { featured: !currentFeatured },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    // Optimistically update UI
+    setProperties((props) =>
+      props.map((p) =>
+        p._id === id ? { ...p, featured: !currentFeatured } : p
+      )
+    );
+
+    // If modal is open for this property, sync it as well
+    if (selectedProperty?._id === id) {
+      setSelectedProperty((prev) => ({ ...prev, featured: !currentFeatured }));
+    }
+  } catch (e) {
+    setError(e.response?.data?.message || "Failed to update featured status");
+  } finally {
+    updateProcessing(id, false);
+  }
+}
+
   return (
     <div className="max-w-7xl mx-auto p-6 bg-white rounded-lg shadow-lg">
       <h2 className="text-3xl font-bold mb-6 text-gray-800">All Properties (Admin)</h2>
@@ -210,6 +243,20 @@ export default function AllProperties() {
                       >
                         Delete
                       </button>
+
+                      <button
+  disabled={isProcessing}
+  onClick={() => toggleFeatured(p._id, !!p.featured, !!p.approved)}
+  className={`text-xs px-2 py-1 rounded transition ${
+    p.featured
+      ? "bg-purple-600 text-white hover:bg-purple-700"
+      : "bg-purple-100 text-purple-800 hover:bg-purple-200"
+  } disabled:opacity-50`}
+  title={p.approved ? (p.featured ? "Unfeature from Home" : "Feature on Home") : "Approve first to feature"}
+>
+  {p.featured ? "Unfeature" : "Feature"}
+</button>
+
                     </td>
                   </tr>
                 );
@@ -220,177 +267,177 @@ export default function AllProperties() {
       )}
 
       {/* Modal for property details */}
-{selectedProperty && (
-  <div
-    onClick={() => setSelectedProperty(null)}
-    className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center overflow-auto p-4"
-  >
-    <div
-      onClick={(e) => e.stopPropagation()}
-      className="relative bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-gray-200"
-    >
-      {/* Header */}
-      <div className="flex justify-between items-center p-6 border-b border-gray-200">
-        <h2 className="text-3xl font-extrabold text-gray-900 truncate max-w-[80%]">
-          {selectedProperty.title || "Property Details"}
-        </h2>
-        <button
+      {selectedProperty && (
+        <div
           onClick={() => setSelectedProperty(null)}
-          className="text-gray-400 hover:text-gray-700 transition"
-          aria-label="Close modal"
+          className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center overflow-auto p-4"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-8 w-8"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto border border-gray-200"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="p-6 space-y-8">
-        {/* Summary Info */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-xl font-semibold mb-3 text-gray-800">Property Overview</h3>
-            <ul className="text-gray-700 space-y-1">
-              <li><span className="font-semibold">Type:</span> {selectedProperty.type || "-"}</li>
-              <li><span className="font-semibold">Furnishing:</span> {selectedProperty.furnishing || "-"}</li>
-              <li><span className="font-semibold">Tenants:</span> {selectedProperty.tenants || "-"}</li>
-              <li><span className="font-semibold">Monthly Rent:</span> ₹{selectedProperty.price?.toLocaleString() || "-"}</li>
-              <li><span className="font-semibold">Deposit:</span> ₹{selectedProperty.deposit?.toLocaleString() || "N/A"}</li>
-              <li><span className="font-semibold">Available From:</span> {selectedProperty.availableFrom ? new Date(selectedProperty.availableFrom).toLocaleDateString() : "-"}</li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-semibold mb-3 text-gray-800">Location</h3>
-            <ul className="text-gray-700 space-y-1">
-              <li><span className="font-semibold">City:</span> {selectedProperty.location?.city || "-"}</li>
-              <li><span className="font-semibold">Locality:</span> {selectedProperty.location?.locality || "-"}</li>
-              <li><span className="font-semibold">Address:</span> {selectedProperty.location?.address || "-"}</li>
-              <li><span className="font-semibold">Pincode:</span> {selectedProperty.location?.pincode || "-"}</li>
-            </ul>
-          </div>
-        </section>
-
-        {/* Description */}
-        <section>
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">Description</h3>
-          <p className="whitespace-pre-line text-gray-700">{selectedProperty.description || "-"}</p>
-        </section>
-
-        {/* Amenities */}
-        <section>
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">Amenities</h3>
-          {selectedProperty.amenities && selectedProperty.amenities.length > 0 ? (
-            <ul className="flex flex-wrap gap-2">
-              {selectedProperty.amenities.map((amenity, idx) => (
-                <li key={idx} className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full shadow-sm">
-                  {amenity}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-gray-500">No amenities listed.</p>
-          )}
-        </section>
-
-        {/* Images gallery */}
-        <section>
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">Property Images</h3>
-          {selectedProperty.images && selectedProperty.images.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {selectedProperty.images.map((img, idx) => (
-                <img
-                  key={idx}
-                  src={`${BACKEND_URL}/uploads/${encodeURIComponent(img)}`}
-                  alt={`Property Image ${idx + 1}`}
-                  className="w-full h-36 object-cover rounded-lg shadow-md"
-                  loading="lazy"
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500">No images available.</p>
-          )}
-        </section>
-
-        {/* Owner Details */}
-        <section>
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">Owner Information</h3>
-          <ul className="text-gray-700 space-y-1">
-            <li><span className="font-semibold">Name:</span> {selectedProperty.user?.ownerKYC?.ownerName || selectedProperty.user?.name || "-"}</li>
-            <li><span className="font-semibold">Email:</span> {selectedProperty.user?.ownerKYC?.ownerEmail || selectedProperty.user?.email || "-"}</li>
-            <li><span className="font-semibold">Phone:</span> {selectedProperty.user?.ownerKYC?.ownerPhone || selectedProperty.user?.contact || "-"}</li>
-            <li><span className="font-semibold">ID Type:</span> {selectedProperty.user?.ownerKYC?.ownerIdType || "-"}</li>
-            <li><span className="font-semibold">ID Number:</span> {selectedProperty.user?.ownerKYC?.ownerIdNumber || "-"}</li>
-          </ul>
-
-          {/* Owner KYC Document */}
-          {selectedProperty.user?.ownerKYC?.ownerIdFile && (
-            <div className="mt-4">
-              <h4 className="font-semibold mb-1">ID Document</h4>
-              <img
-                src={`${BACKEND_URL}/uploads/${encodeURIComponent(selectedProperty.user.ownerKYC.ownerIdFile)}`}
-                alt="Owner ID Document"
-                className="max-w-xs rounded-lg shadow-md"
-                loading="lazy"
-              />
-            </div>
-          )}
-
-          {/* Ownership Proof */}
-          {selectedProperty.user?.ownershipProof?.ownershipProofFile && (
-            <div className="mt-6">
-              <h4 className="font-semibold mb-1">Ownership Proof</h4>
-              <p className="mb-2"><span className="font-semibold">Type:</span> {selectedProperty.user.ownershipProof.ownershipProofType || "-"}</p>
-              <p className="mb-2"><span className="font-semibold">Document No:</span> {selectedProperty.user.ownershipProof.ownershipDocNumber || "-"}</p>
-              <img
-                src={`${BACKEND_URL}/uploads/${encodeURIComponent(selectedProperty.user.ownershipProof.ownershipProofFile)}`}
-                alt="Ownership Proof Document"
-                className="max-w-xs rounded-lg shadow-md"
-                loading="lazy"
-              />
-            </div>
-          )}
-        </section>
-
-        {/* Status & Admin Notes */}
-        <section>
-          <h3 className="text-xl font-semibold mb-3 text-gray-800">Status</h3>
-          <div>
-            {selectedProperty.approved ? (
-              <span className="inline-block bg-green-100 text-green-800 px-4 py-1 rounded-full font-semibold shadow-sm">Approved</span>
-            ) : selectedProperty.rejected ? (
-              <span
-                className="inline-block bg-red-100 text-red-800 px-4 py-1 rounded-full font-semibold shadow-sm cursor-help"
-                title={selectedProperty.rejectionReason || "No rejection reason provided"}
+            {/* Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <h2 className="text-3xl font-extrabold text-gray-900 truncate max-w-[80%]">
+                {selectedProperty.title || "Property Details"}
+              </h2>
+              <button
+                onClick={() => setSelectedProperty(null)}
+                className="text-gray-400 hover:text-gray-700 transition"
+                aria-label="Close modal"
               >
-                Rejected
-              </span>
-            ) : (
-              <span className="inline-block bg-yellow-100 text-yellow-800 px-4 py-1 rounded-full font-semibold shadow-sm">Pending</span>
-            )}
-          </div>
-          {selectedProperty.rejectionReason && !selectedProperty.approved && (
-            <p className="mt-2 text-red-600 italic">Rejection Reason: {selectedProperty.rejectionReason}</p>
-          )}
-        </section>
-      </div>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-8 w-8"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
 
-    </div>
-    </div>
-)}
+            {/* Content */}
+            <div className="p-6 space-y-8">
+              {/* Summary Info */}
+              <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-xl font-semibold mb-3 text-gray-800">Property Overview</h3>
+                  <ul className="text-gray-700 space-y-1">
+                    <li><span className="font-semibold">Type:</span> {selectedProperty.type || "-"}</li>
+                    <li><span className="font-semibold">Furnishing:</span> {selectedProperty.furnishing || "-"}</li>
+                    <li><span className="font-semibold">Tenants:</span> {selectedProperty.tenants || "-"}</li>
+                    <li><span className="font-semibold">Monthly Rent:</span> ₹{selectedProperty.price?.toLocaleString() || "-"}</li>
+                    <li><span className="font-semibold">Deposit:</span> ₹{selectedProperty.deposit?.toLocaleString() || "N/A"}</li>
+                    <li><span className="font-semibold">Available From:</span> {selectedProperty.availableFrom ? new Date(selectedProperty.availableFrom).toLocaleDateString() : "-"}</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-semibold mb-3 text-gray-800">Location</h3>
+                  <ul className="text-gray-700 space-y-1">
+                    <li><span className="font-semibold">City:</span> {selectedProperty.location?.city || "-"}</li>
+                    <li><span className="font-semibold">Locality:</span> {selectedProperty.location?.locality || "-"}</li>
+                    <li><span className="font-semibold">Address:</span> {selectedProperty.location?.address || "-"}</li>
+                    <li><span className="font-semibold">Pincode:</span> {selectedProperty.location?.pincode || "-"}</li>
+                  </ul>
+                </div>
+              </section>
+
+              {/* Description */}
+              <section>
+                <h3 className="text-xl font-semibold mb-3 text-gray-800">Description</h3>
+                <p className="whitespace-pre-line text-gray-700">{selectedProperty.description || "-"}</p>
+              </section>
+
+              {/* Amenities */}
+              <section>
+                <h3 className="text-xl font-semibold mb-3 text-gray-800">Amenities</h3>
+                {selectedProperty.amenities && selectedProperty.amenities.length > 0 ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {selectedProperty.amenities.map((amenity, idx) => (
+                      <li key={idx} className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1 rounded-full shadow-sm">
+                        {amenity}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500">No amenities listed.</p>
+                )}
+              </section>
+
+              {/* Images gallery */}
+              <section>
+                <h3 className="text-xl font-semibold mb-3 text-gray-800">Property Images</h3>
+                {selectedProperty.images && selectedProperty.images.length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {selectedProperty.images.map((img, idx) => (
+                      <img
+                        key={idx}
+                        src={`${BACKEND_URL}/uploads/${encodeURIComponent(img)}`}
+                        alt={`Property Image ${idx + 1}`}
+                        className="w-full h-36 object-cover rounded-lg shadow-md"
+                        loading="lazy"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-gray-500">No images available.</p>
+                )}
+              </section>
+
+              {/* Owner Details */}
+              <section>
+                <h3 className="text-xl font-semibold mb-3 text-gray-800">Owner Information</h3>
+                <ul className="text-gray-700 space-y-1">
+                  <li><span className="font-semibold">Name:</span> {selectedProperty.user?.ownerKYC?.ownerName || selectedProperty.user?.name || "-"}</li>
+                  <li><span className="font-semibold">Email:</span> {selectedProperty.user?.ownerKYC?.ownerEmail || selectedProperty.user?.email || "-"}</li>
+                  <li><span className="font-semibold">Phone:</span> {selectedProperty.user?.ownerKYC?.ownerPhone || selectedProperty.user?.contact || "-"}</li>
+                  <li><span className="font-semibold">ID Type:</span> {selectedProperty.user?.ownerKYC?.ownerIdType || "-"}</li>
+                  <li><span className="font-semibold">ID Number:</span> {selectedProperty.user?.ownerKYC?.ownerIdNumber || "-"}</li>
+                </ul>
+
+                {/* Owner KYC Document */}
+                {selectedProperty.user?.ownerKYC?.ownerIdFile && (
+                  <div className="mt-4">
+                    <h4 className="font-semibold mb-1">ID Document</h4>
+                    <img
+                      src={`${BACKEND_URL}/uploads/${encodeURIComponent(selectedProperty.user.ownerKYC.ownerIdFile)}`}
+                      alt="Owner ID Document"
+                      className="max-w-xs rounded-lg shadow-md"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+
+                {/* Ownership Proof */}
+                {selectedProperty.user?.ownershipProof?.ownershipProofFile && (
+                  <div className="mt-6">
+                    <h4 className="font-semibold mb-1">Ownership Proof</h4>
+                    <p className="mb-2"><span className="font-semibold">Type:</span> {selectedProperty.user.ownershipProof.ownershipProofType || "-"}</p>
+                    <p className="mb-2"><span className="font-semibold">Document No:</span> {selectedProperty.user.ownershipProof.ownershipDocNumber || "-"}</p>
+                    <img
+                      src={`${BACKEND_URL}/uploads/${encodeURIComponent(selectedProperty.user.ownershipProof.ownershipProofFile)}`}
+                      alt="Ownership Proof Document"
+                      className="max-w-xs rounded-lg shadow-md"
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+              </section>
+
+              {/* Status & Admin Notes */}
+              <section>
+                <h3 className="text-xl font-semibold mb-3 text-gray-800">Status</h3>
+                <div>
+                  {selectedProperty.approved ? (
+                    <span className="inline-block bg-green-100 text-green-800 px-4 py-1 rounded-full font-semibold shadow-sm">Approved</span>
+                  ) : selectedProperty.rejected ? (
+                    <span
+                      className="inline-block bg-red-100 text-red-800 px-4 py-1 rounded-full font-semibold shadow-sm cursor-help"
+                      title={selectedProperty.rejectionReason || "No rejection reason provided"}
+                    >
+                      Rejected
+                    </span>
+                  ) : (
+                    <span className="inline-block bg-yellow-100 text-yellow-800 px-4 py-1 rounded-full font-semibold shadow-sm">Pending</span>
+                  )}
+                </div>
+                {selectedProperty.rejectionReason && !selectedProperty.approved && (
+                  <p className="mt-2 text-red-600 italic">Rejection Reason: {selectedProperty.rejectionReason}</p>
+                )}
+              </section>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

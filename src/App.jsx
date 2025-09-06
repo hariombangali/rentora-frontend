@@ -19,6 +19,7 @@ import AllProperties from "./pages/Admin/AllProperties";
 import Users from "./pages/Admin/Users";
 import OwnerVerification from "./pages/Admin/OwnerVerification";
 import ProfilePage from "./pages/Profile";
+import Inbox from "./pages/Inbox";
 
 function App() {
   const { user } = useAuth();
@@ -63,6 +64,7 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/login" element={<Login />} />
+             <Route path="/inbox" element={<Inbox />} />
             <Route
               path="/postProperty"
               element={

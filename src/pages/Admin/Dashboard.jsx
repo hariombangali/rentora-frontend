@@ -8,7 +8,7 @@ import {
   UserGroupIcon,
   UserIcon,
   CurrencyRupeeIcon,
-  DocumentCheckIcon,
+  DocumentCheckIcon, 
   ChartBarSquareIcon,
 } from "@heroicons/react/24/outline";
 

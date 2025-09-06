@@ -4,28 +4,45 @@ import PropertyCard from "../components/PropertyCard";
 import FilterSidebar from "../components/FilterSidebar";
 
 export default function Properties() {
-  const [area, setArea] = useState('');
-  const [type, setType] = useState('');
+  const [area, setArea] = useState(''); // This will filter by city or locality
+  const [type, setType] = useState(''); // This will filter by occupancyType
   const [minRent, setMinRent] = useState('');
   const [maxRent, setMaxRent] = useState('');
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch only approved:true properties
+  // Fetch only approved properties
   useEffect(() => {
     setLoading(true);
-    API.get('/properties?approved=true')
-      .then(res => setProperties(res.data))
-      .finally(() => setLoading(false));
+    const fetchProperties = async () => {
+      try {
+        const res = await API.get('/properties?approved=true');
+        setProperties(res.data);
+      } catch (error) {
+        console.error("Failed to fetch properties:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProperties();
   }, []);
 
-  // Filtering logic stays same
-  const filtered = properties.filter(p =>
-    (area === '' || p.area === area) &&
-    (type === '' || p.type === type) &&
-    (minRent === '' || p.rent >= Number(minRent)) &&
-    (maxRent === '' || p.rent <= Number(maxRent))
-  );
+  // **CORRECTED FILTERING LOGIC**
+  const filtered = properties.filter(p => {
+    // Area filter: checks if the search term is in the city or locality
+    const areaMatch = area === '' ||
+      p.city?.toLowerCase().includes(area.toLowerCase()) ||
+      p.locality?.toLowerCase().includes(area.toLowerCase());
+
+    // Type filter: checks against occupancyType
+    const typeMatch = type === '' || p.occupancyType === type;
+
+    // Rent filter: checks against price
+    const minRentMatch = minRent === '' || p.price >= Number(minRent);
+    const maxRentMatch = maxRent === '' || p.price <= Number(maxRent);
+
+    return areaMatch && typeMatch && minRentMatch && maxRentMatch;
+  });
 
   return (
     <div className="flex flex-col md:flex-row max-w-7xl mx-auto py-8 gap-5">
@@ -43,11 +60,11 @@ export default function Properties() {
       </aside>
       <section className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
         {loading ? (
-          <p className="text-center text-gray-600 mt-8 text-lg">Loading properties...</p>
+          <p className="col-span-full text-center text-gray-600 mt-8 text-lg">Loading properties...</p>
         ) : filtered.length > 0 ? (
           filtered.map(p => <PropertyCard key={p._id} property={p} />)
         ) : (
-          <p className="text-center text-gray-600 mt-8 text-lg">No properties found.</p>
+          <p className="col-span-full text-center text-gray-600 mt-8 text-lg">No properties found matching your criteria.</p>
         )}
       </section>
     </div>

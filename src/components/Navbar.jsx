@@ -11,6 +11,7 @@ export default function Navbar() {
   const accountRef = useRef(null);
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [convCount, setConvCount] = useState(0);
 
   // Close dropdown if outside click
   useEffect(() => {
@@ -54,6 +55,23 @@ export default function Navbar() {
     { label: "Up to ₹20,000", value: "20000" },
     { label: "Above ₹20,000", value: "20001" }
   ];
+
+
+  useEffect(() => {
+    const fetchCount = async () => {
+      if (!user) return;
+      try {
+        const res = await API.get("/messages/conversations/count", {
+          withCredentials: true,
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        setConvCount(res.data.count);
+      } catch (err) {
+        console.error("Failed to load conversations count", err);
+      }
+    };
+    fetchCount();
+  }, [user]);
 
   return (
     <nav className="bg-white/90 backdrop-blur-xl shadow-lg sticky top-0 z-50 border-b border-blue-100">
@@ -146,7 +164,20 @@ export default function Navbar() {
                   My Properties
                 </Link>
               )}
-                            <div className="relative" ref={accountRef}>
+
+
+              {user && (
+                <Link to="/inbox" className="relative">
+                  Inbox
+                  {convCount > 0 && (
+                    <span className="absolute -top-2 -right-3 bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5">
+                      {convCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+
+              <div className="relative" ref={accountRef}>
                 <button
                   onClick={() => setAccountDropdown((v) => !v)}
                   aria-haspopup="true"
@@ -199,7 +230,7 @@ export default function Navbar() {
               >
                 Login
               </Link>
-    
+
             </div>
           )}
         </div>
