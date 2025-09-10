@@ -10,6 +10,7 @@ export default function Properties() {
   const [maxRent, setMaxRent] = useState('');
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+    const [wishlistIds, setWishlistIds] = useState([]);
 
   // Fetch only approved properties
   useEffect(() => {
@@ -18,6 +19,15 @@ export default function Properties() {
       try {
         const res = await API.get('/properties?approved=true');
         setProperties(res.data);
+
+          const token = localStorage.getItem("token");
+        if (token) {
+        const res = await API.get("/wishlist", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setWishlistIds(res.data.map((p) => p._id));
+      }
+
       } catch (error) {
         console.error("Failed to fetch properties:", error);
       } finally {
@@ -55,14 +65,14 @@ export default function Properties() {
           minRent={minRent}
           setMinRent={setMinRent}
           maxRent={maxRent}
-          setMaxRent={setMaxRent}
+          setMaxRent={setMaxRent}  
         />
       </aside>
       <section className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
         {loading ? (
           <p className="col-span-full text-center text-gray-600 mt-8 text-lg">Loading properties...</p>
         ) : filtered.length > 0 ? (
-          filtered.map(p => <PropertyCard key={p._id} property={p} />)
+          filtered.map(p => <PropertyCard key={p._id} property={p} wishlistIds={wishlistIds} />)
         ) : (
           <p className="col-span-full text-center text-gray-600 mt-8 text-lg">No properties found matching your criteria.</p>
         )}

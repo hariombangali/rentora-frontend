@@ -1,50 +1,48 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
-// --- CONSTANTS ---
-// Defined outside the component to prevent re-creation on every render.
 const INITIAL_FORM_DATA = {
-    title: "",
-    description: "",
-    availableFor: "Any",
-    preferredTenants: "Any",
-    occupancyType: "Single",
-    sharingCount: "2",
-    bedrooms: 1,
-    attachedBathroom: "Yes",
-    attachedBalcony: "Yes",
-    roomFurnishing: "Unfurnished",
-    commonAreaFacilities: [],
-    facilitiesInput: "",
-    availableFrom: "",
-    ageOfProperty: "",
-    totalFloors: "",
-    propertyOnFloor: "",
-    city: "",
-    locality: "",
-    address: "",
-    pincode: "",
-    price: "",
-    deposit: "",
-    maintenance: "",
-    maintenanceFreq: "Yearly",
-    earlyLeavingCharges: "",
-    minContractDuration: "1 Month",
-    noticePeriod: "1 Month",
-    pgAmenities: [],
-    pgAmenitiesInput: "",
-    ownerName: "",
-    ownerEmail: "",
-    ownerPhone: "",
-    ownerIdType: "",
-    ownerIdNumber: "",
-    ownerIdFile: null,
-    ownershipProofType: "",
-    ownershipProofDocNumber: "",
-    ownershipProofFile: null,
-    images: [], // Important: this must be an array for files
+  title: "",
+  description: "",
+  availableFor: "Any",
+  preferredTenants: "Any",
+  occupancyType: "Single",
+  sharingCount: "2",
+  bedrooms: 1,
+  attachedBathroom: "Yes",
+  attachedBalcony: "Yes",
+  roomFurnishing: "Unfurnished",
+  commonAreaFacilities: [],
+  facilitiesInput: "",
+  availableFrom: "",
+  ageOfProperty: "",
+  totalFloors: "",
+  propertyOnFloor: "",
+  city: "",
+  locality: "",
+  address: "",
+  pincode: "",
+  price: "",
+  deposit: "",
+  maintenance: "",
+  maintenanceFreq: "Yearly",
+  earlyLeavingCharges: "",
+  minContractDuration: "1 Month",
+  noticePeriod: "1 Month",
+  pgAmenities: [],
+  pgAmenitiesInput: "",
+  ownerName: "",
+  ownerEmail: "",
+  ownerPhone: "",
+  ownerIdType: "",
+  ownerIdNumber: "",
+  ownerIdFile: null,
+  ownershipProofType: "",
+  ownershipProofDocNumber: "",
+  ownershipProofFile: null,
+  images: [],
 };
 
 const SHARING_OPTIONS = ["2", "3", "4", "5+"];
@@ -56,190 +54,281 @@ const NOTICE_OPTIONS = ["15 Days", "1 Month", "2 Months"];
 const AMENITIES_LIST = ["Wi-Fi", "Parking", "Balcony", "Water Supply", "AC", "Power Backup", "Lift"];
 const PG_AMENITIES_LIST = ["Meal", "Laundry", "Housekeeping", "Common TV", "CCTV", "RO Water", "Refrigerator", "Geyser"];
 
-// --- COMPONENT ---
 export default function PostProperty() {
-    const navigate = useNavigate();
-    const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
 
-    const STEPS = useMemo(() =>
-        user?.role === "owner"
-            ? ["Property Details", "Pricing", "Amenities", "Photos", "Review"]
-            : ["Property Details", "Pricing", "Amenities", "Photos", "Owner Info", "Review"],
-        [user?.role]
-    );
-    const totalSteps = STEPS.length;
+  const STEPS = useMemo(
+    () =>
+      user?.role === "owner"
+        ? ["Property Details", "Pricing", "Amenities", "Photos", "Review"]
+        : ["Property Details", "Pricing", "Amenities", "Photos", "Owner Info", "Review"],
+    [user?.role]
+  );
+  const totalSteps = STEPS.length;
 
-    const [step, setStep] = useState(1);
-    const [formData, setFormData] = useState(INITIAL_FORM_DATA);
-    const [uploading, setUploading] = useState(false);
-    const [formErrors, setFormErrors] = useState({});
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
+  const [existingImages, setExistingImages] = useState([]); // server filenames
+  const [loadingPrefill, setLoadingPrefill] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [formErrors, setFormErrors] = useState({});
 
-    useEffect(() => {
-        if (user?.role === "owner") {
-            setFormData((prev) => ({
-                ...prev,
-                ownerName: user.name || "",
-                ownerEmail: user.email || "",
-                ownerPhone: user.phone || "",
-            }));
-        }
-    }, [user]);
+  useEffect(() => {
+    if (user?.role === "owner") {
+      setFormData((prev) => ({
+        ...prev,
+        ownerName: user.name || "",
+        ownerEmail: user.email || "",
+        ownerPhone: user.phone || "",
+      }));
+    }
+  }, [user]);
 
-    const setField = useCallback((name, value) => {
-        setFormData(prev => ({ ...prev, [name]: value }));
-    }, []);
+  const setField = useCallback((name, value) => {
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  }, []);
 
-    const handleChange = useCallback((e) => {
-        const { name, value, type, files } = e.target;
-        if (type === "file") {
-            if (name === "images") {
-                const newFiles = Array.from(files);
-                setFormData(prev => ({ ...prev, images: [...prev.images, ...newFiles].slice(0, 8) }));
-            } else {
-                setFormData(prev => ({ ...prev, [name]: files[0] }));
-            }
+  const handleChange = useCallback(
+    (e) => {
+      const { name, value, type, files } = e.target;
+      if (type === "file") {
+        if (name === "images") {
+          const newFiles = Array.from(files);
+          setFormData((prev) => ({ ...prev, images: [...prev.images, ...newFiles].slice(0, 8) }));
         } else {
-            setField(name, value);
+          setFormData((prev) => ({ ...prev, [name]: files }));
         }
-    }, [setField]);
+      } else {
+        setField(name, value);
+      }
+    },
+    [setField]
+  );
 
-    const handleChipArrayToggle = useCallback((name, value) => {
-        setFormData((prev) => ({
-            ...prev,
-            [name]: prev[name].includes(value)
-                ? prev[name].filter((item) => item !== value)
-                : [...prev[name], value],
-        }));
-    }, []);
-    
-    const handleCustomAmenity = useCallback((e, fieldName, inputName) => {
-        const value = e.target.value.trim();
-        if (e.key === 'Enter' && value) {
-            e.preventDefault();
-            handleChipArrayToggle(fieldName, value);
-            setField(inputName, "");
-        }
-    }, [handleChipArrayToggle, setField]);
-    
-    const removeImage = useCallback((indexToRemove) => {
-        setFormData(prev => ({
-            ...prev,
-            images: prev.images.filter((_, index) => index !== indexToRemove)
-        }));
-    }, []);
+  const handleChipArrayToggle = useCallback((name, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: prev[name].includes(value)
+        ? prev[name].filter((item) => item !== value)
+        : [...prev[name], value],
+    }));
+  }, []);
 
-    const validateStep = useCallback((currentStep) => {
-        const errors = {};
-        const stepLabel = STEPS[currentStep - 1];
-
-        if (stepLabel === "Property Details") {
-            if (!formData.title.trim()) errors.title = "Title is required";
-            if (!formData.description.trim()) errors.description = "Description is required";
-            if (!formData.city.trim()) errors.city = "City is required";
-            if (!formData.locality.trim()) errors.locality = "Locality is required";
-            if (!formData.pincode.trim() || !/^\d{6}$/.test(formData.pincode)) errors.pincode = "Valid 6-digit pincode is required";
-            if (!formData.address.trim()) errors.address = "Full address is required";
-            if (!formData.availableFrom) errors.availableFrom = "Available date is required";
-        }
-        if (stepLabel === "Pricing") {
-            if (!formData.price || isNaN(formData.price)) errors.price = "A valid rent amount is required";
-        }
-        if (stepLabel === "Owner Info") {
-            if (!formData.ownerName.trim()) errors.ownerName = "Owner name is required";
-            if (!formData.ownerEmail.trim() || !/^\S+@\S+\.\S+$/.test(formData.ownerEmail)) errors.ownerEmail = "A valid email is required";
-            if (!formData.ownerPhone.trim() || !/^\d{10}$/.test(formData.ownerPhone)) errors.ownerPhone = "A valid 10-digit phone is required";
-            if (!formData.ownerIdFile) errors.ownerIdFile = "ID proof file is required";
-            if (!formData.ownershipProofFile) errors.ownershipProofFile = "Ownership proof document is required";
-        }
-        if (stepLabel === "Photos" && formData.images.length === 0) {
-            errors.images = "Please upload at least one image.";
-        }
-        return errors;
-    }, [formData, STEPS]);
-
-    const nextStep = useCallback(() => {
-        const errors = validateStep(step);
-        if (Object.keys(errors).length > 0) {
-            setFormErrors(errors);
-            return;
-        }
-        setFormErrors({});
-        setStep((s) => Math.min(s + 1, totalSteps));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [step, totalSteps, validateStep]);
-
-    const prevStep = useCallback(() => {
-        setStep((s) => Math.max(s - 1, 1));
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, []);
-
-    const progressPercent = useMemo(() => ((step - 1) / (totalSteps - 1)) * 100, [step, totalSteps]);
-
-    const handleSubmit = useCallback(async (e) => {
+  const handleCustomAmenity = useCallback(
+    (e, fieldName, inputName) => {
+      const value = e.target.value.trim();
+      if (e.key === "Enter" && value) {
         e.preventDefault();
+        handleChipArrayToggle(fieldName, value);
+        setField(inputName, "");
+      }
+    },
+    [handleChipArrayToggle, setField]
+  );
 
-        let allErrors = {};
-        for (let i = 1; i <= totalSteps; i++) {
-            allErrors = { ...allErrors, ...validateStep(i) };
+  const removeImage = useCallback((indexToRemove) => {
+    setFormData((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, index) => index !== indexToRemove),
+    }));
+  }, []);
+
+  const validateStep = useCallback(
+    (currentStep) => {
+      const errors = {};
+      const stepLabel = STEPS[currentStep - 1];
+
+      if (stepLabel === "Property Details") {
+        if (!formData.title.trim()) errors.title = "Title is required";
+        if (!formData.description.trim()) errors.description = "Description is required";
+        if (!formData.city.trim()) errors.city = "City is required";
+        if (!formData.locality.trim()) errors.locality = "Locality is required";
+        if (!formData.pincode.trim() || !/^\d{6}$/.test(formData.pincode)) errors.pincode = "Valid 6-digit pincode is required";
+        if (!formData.address.trim()) errors.address = "Full address is required";
+        if (!formData.availableFrom) errors.availableFrom = "Available date is required";
+      }
+      if (stepLabel === "Pricing") {
+        if (!formData.price || isNaN(formData.price)) errors.price = "A valid rent amount is required";
+      }
+      if (stepLabel === "Owner Info") {
+        if (!formData.ownerName.trim()) errors.ownerName = "Owner name is required";
+        if (!formData.ownerEmail.trim() || !/^\S+@\S+\.\S+$/.test(formData.ownerEmail)) errors.ownerEmail = "A valid email is required";
+        if (!formData.ownerPhone.trim() || !/^\d{10}$/.test(formData.ownerPhone)) errors.ownerPhone = "A valid 10-digit phone is required";
+        if (!formData.ownerIdFile) errors.ownerIdFile = "ID proof file is required";
+        if (!formData.ownershipProofFile) errors.ownershipProofFile = "Ownership proof document is required";
+      }
+      if (stepLabel === "Photos") {
+        const totalImgs = (existingImages?.length || 0) + (formData.images?.length || 0);
+        if (totalImgs === 0) errors.images = "Please upload at least one image.";
+      }
+      return errors;
+    },
+    [formData, STEPS, existingImages]
+  );
+
+  const nextStep = useCallback(() => {
+    const errors = validateStep(step);
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      return;
+    }
+    setFormErrors({});
+    setStep((s) => Math.min(s + 1, totalSteps));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [step, totalSteps, validateStep]);
+
+  const prevStep = useCallback(() => {
+    setStep((s) => Math.max(s - 1, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const progressPercent = useMemo(() => ((step - 1) / (totalSteps - 1)) * 100, [step, totalSteps]);
+
+  const handleSubmit = useCallback(
+    async (e) => {
+      e.preventDefault();
+
+      let allErrors = {};
+      for (let i = 1; i <= totalSteps; i++) {
+        allErrors = { ...allErrors, ...validateStep(i) };
+      }
+      if (Object.keys(allErrors).length > 0) {
+        setFormErrors(allErrors);
+        const firstErrorStepIndex = STEPS.findIndex((_, index) => Object.keys(validateStep(index + 1)).length > 0);
+        if (firstErrorStepIndex !== -1) {
+          setStep(firstErrorStepIndex + 1);
         }
-        if (Object.keys(allErrors).length > 0) {
-            setFormErrors(allErrors);
-            const firstErrorStepIndex = STEPS.findIndex((_, index) => Object.keys(validateStep(index + 1)).length > 0);
-            if(firstErrorStepIndex !== -1) {
-                setStep(firstErrorStepIndex + 1);
-            }
-            alert("Please review the form and fix the highlighted errors.");
-            return;
+        alert("Please review the form and fix the highlighted errors.");
+        return;
+      }
+
+      setUploading(true);
+      const data = new FormData();
+
+      // Append primitives and arrays (repeat key for arrays)
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key === "images") return; // handle below
+        if (Array.isArray(value)) {
+          value.forEach((item) => data.append(key, item));
+        } else if (value instanceof File) {
+          data.append(key, value);
+        } else if (value !== null && value !== undefined && value !== "") {
+          data.append(key, String(value));
+        }
+      });
+
+      // Normalize furnishing key for backend
+      data.append("furnishing", formData.roomFurnishing);
+
+      // Keep existing images on edit (no brackets)
+      if (isEdit) {
+        existingImages.forEach((name) => data.append("retainedImages", name));
+      }
+
+      // New image uploads
+      (formData.images || []).forEach((file) => data.append("images", file));
+
+      try {
+        const token = localStorage.getItem("token");
+        const headers = { Authorization: `Bearer ${token}` };
+        const res = isEdit
+          ? await API.put(`/properties/${id}`, data, { headers })
+          : await API.post(`/properties`, data, { headers });
+
+        if (!isEdit && res.status === 201 && user?.role !== "owner") {
+          await API.put(`/auth/upgrade-role`, { role: "owner" }, { headers });
         }
 
-        setUploading(true);
-        const data = new FormData();
-
-        Object.entries(formData).forEach(([key, value]) => {
-            if (key === 'images' && Array.isArray(value)) {
-                value.forEach(file => data.append('images', file));
-            } else if (Array.isArray(value)) {
-                value.forEach(item => data.append(key, item));
-            } else if (value instanceof File) {
-                data.append(key, value);
-            } else if (value !== null && value !== undefined && value !== "") {
-                data.append(key, String(value));
-            }
+        navigate("/my-properties", {
+          state: { success: isEdit ? "Property updated successfully!" : "Property posted successfully!" },
         });
+      } catch (err) {
+        alert(err.response?.data?.message || (isEdit ? "Failed to update property." : "Failed to post property."));
+        console.error(err);
+      } finally {
+        setUploading(false);
+      }
+    },
+    [formData, totalSteps, existingImages, isEdit, id, navigate, user?.role, validateStep, STEPS]
+  );
 
-        try {
-            const token = localStorage.getItem("token");
-            const res = await API.post("/properties", data, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+  const minDate = useMemo(() => new Date().toISOString().split("T"), []);
 
-            if (res.status === 201) {
-                if (user?.role !== "owner") {
-                    await API.put("/auth/upgrade-role", { role: "owner" }, { headers: { Authorization: `Bearer ${token}` } });
-                }
-                navigate("/my-properties", { state: { success: "Property posted successfully!" } });
-            }
-        } catch (err) {
-            alert(err.response?.data?.message || "Failed to post property. Please try again.");
-            console.error(err);
-        } finally {
-            setUploading(false);
-        }
-    }, [formData, STEPS, totalSteps, navigate, user?.role, validateStep]);
-    
-    const minDate = useMemo(() => new Date().toISOString().split('T')[0], []);
+  // Prefill on edit
+  useEffect(() => {
+    if (!isEdit) return;
+    (async () => {
+      try {
+        setLoadingPrefill(true);
+        const token = localStorage.getItem("token");
+        const res = await API.get(`/properties/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const p = res.data || {};
 
-    return (
+        setFormData((prev) => ({
+          ...prev,
+          title: p.title || "",
+          description: p.description || "",
+          availableFor: p.availableFor || "Any",
+          preferredTenants: p.preferredTenants || "Any",
+          occupancyType: p.occupancyType || "Single",
+          sharingCount: String(p.sharingCount ?? "2"),
+          bedrooms: p.bedrooms ?? 1,
+          attachedBathroom: p.attachedBathroom || "Yes",
+          attachedBalcony: p.attachedBalcony || "Yes",
+          roomFurnishing: p.furnishing || "Unfurnished",
+          commonAreaFacilities: p.commonAreaFacilities || [],
+          availableFrom: p.availableFrom ? String(p.availableFrom).slice(0, 10) : "",
+          ageOfProperty: p.ageOfProperty || "",
+          totalFloors: p.totalFloors ?? "",
+          propertyOnFloor: p.propertyOnFloor ?? "",
+          city: p.location?.city || p.city || "",
+          locality: p.location?.locality || p.locality || "",
+          address: p.location?.address || p.address || "",
+          pincode: p.location?.pincode || p.pincode || "",
+          price: p.price ?? "",
+          deposit: p.deposit ?? "",
+          maintenance: p.maintenance ?? "",
+          maintenanceFreq: p.maintenanceFreq || "Yearly",
+          earlyLeavingCharges: p.earlyLeavingCharges ?? "",
+          minContractDuration: p.minContractDuration || "1 Month",
+          noticePeriod: p.noticePeriod || "1 Month",
+          pgAmenities: p.pgAmenities || [],
+          ownerName: p.owner?.name || prev.ownerName,
+          ownerEmail: p.owner?.email || prev.ownerEmail,
+          ownerPhone: p.owner?.phone || prev.ownerPhone,
+          ownerIdType: p.ownerIdType || "",
+          ownerIdNumber: p.ownerIdNumber || "",
+          ownershipProofType: p.ownershipProofType || "",
+          ownershipProofDocNumber: p.ownershipProofDocNumber || "",
+          images: [],
+        }));
+        setExistingImages(Array.isArray(p.images) ? p.images : []);
+      } catch (e) {
+        console.error(e);
+        alert("Failed to load property for editing");
+      } finally {
+        setLoadingPrefill(false);
+      }
+    })();
+  }, [isEdit, id]);
+
+
+  return (
     <div className="max-w-4xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
       <div className="text-center mb-8">
         <h2 className="text-3xl font-bold text-gray-800">
-          <span className="text-blue-600">List</span> Your Property
+          <span className="text-blue-600">{isEdit ? "Edit" : "List"}</span> Your Property
         </h2>
-        <p className="text-gray-600 mt-2">
-          Reach thousands of potential tenants in just a few steps
+       <p className="text-gray-600 mt-2">
+          {isEdit ? "Update your listing details" : "Reach thousands of potential tenants in just a few steps"}
         </p>
       </div>
-      
+
       {/* Stepper */}
       <div className="mb-8">
         <div className="flex items-center justify-between relative">
@@ -247,9 +336,9 @@ export default function PostProperty() {
             <div key={label} className="flex flex-col items-center z-10">
               <div
                 className={`w-10 h-10 flex items-center justify-center rounded-full border-2 font-medium transition-all duration-300
-                  ${step === idx + 1 ? "bg-blue-600 text-white border-blue-600 transform scale-110" : 
-                    step > idx + 1 ? "bg-green-500 text-white border-green-500" : 
-                    "bg-white text-gray-400 border-gray-300"}`}
+                  ${step === idx + 1 ? "bg-blue-600 text-white border-blue-600 transform scale-110" :
+                    step > idx + 1 ? "bg-green-500 text-white border-green-500" :
+                      "bg-white text-gray-400 border-gray-300"}`}
               >
                 {idx + 1}
               </div>
@@ -295,7 +384,7 @@ export default function PostProperty() {
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-gray-50 p-6 rounded-xl">
               <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Room Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -366,7 +455,7 @@ export default function PostProperty() {
                 )}
               </div>
             </div>
-            
+
             <div className="bg-gray-50 p-6 rounded-xl">
               <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Location Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -401,7 +490,7 @@ export default function PostProperty() {
             </div>
           </div>
         )}
-        
+
         {/* Step 2: Pricing */}
         {STEPS[step - 1] === "Pricing" && (
           <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
@@ -483,20 +572,76 @@ export default function PostProperty() {
         )}
 
         {/* Step 4: Photos */}
-        {STEPS[step - 1] === "Photos" && (
+      {STEPS[step - 1] === "Photos" && (
           <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
             <h3 className="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Upload Photos</h3>
+
+            {isEdit && existingImages.length > 0 && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">Existing Photos</label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {existingImages.map((name, idx) => {
+                    const base = API.defaults.baseURL.replace("/api", "");
+                    const url = `${base}/uploads/${name}`;
+                    return (
+                      <div key={`${name}-${idx}`} className="relative group">
+                        <img
+                          src={url}
+                          alt={`Existing ${idx + 1}`}
+                          className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                          loading="lazy"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setExistingImages((arr) => arr.filter((_, i) => i !== idx))}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Upload Property Images (Max 8)<span className="text-xs text-gray-500 ml-2">Recommended size: 1200x800px</span></label>
-              <div className={`border-2 border-dashed rounded-lg p-6 text-center transition ${formData.images.length >= 8 ? "border-gray-300 bg-gray-100" : "border-blue-400 bg-blue-50 hover:bg-blue-100"}`}>
-                <input name="images" type="file" multiple accept="image/*" onChange={handleChange} disabled={formData.images.length >= 8} className="hidden" id="image-upload" />
-                <label htmlFor="image-upload" className={`cursor-pointer flex flex-col items-center justify-center ${formData.images.length >= 8 ? "opacity-50 cursor-not-allowed" : ""}`}>
-                  <svg className="w-12 h-12 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                  <p className="text-gray-700 mb-1">{formData.images.length >= 8 ? "Maximum images uploaded" : "Click to browse or drag & drop"}</p>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Upload Property Images (Max 8)
+                <span className="text-xs text-gray-500 ml-2">Recommended size: 1200x800px</span>
+              </label>
+              <div
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition ${
+                  formData.images.length >= 8 ? "border-gray-300 bg-gray-100" : "border-blue-400 bg-blue-50 hover:bg-blue-100"
+                }`}
+              >
+                <input
+                  name="images"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={handleChange}
+                  disabled={formData.images.length >= 8}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className={`cursor-pointer flex flex-col items-center justify-center ${
+                    formData.images.length >= 8 ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  <svg className="w-12 h-12 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p className="text-gray-700 mb-1">
+                    {formData.images.length >= 8 ? "Maximum images uploaded" : "Click to browse or drag & drop"}
+                  </p>
                   <p className="text-sm text-gray-500">{8 - formData.images.length} images remaining</p>
                 </label>
               </div>
               {formErrors.images && <p className="mt-1 text-sm text-red-600">{formErrors.images}</p>}
+
               {formData.images.length > 0 && (
                 <div className="mt-6">
                   <label className="block text-sm font-medium text-gray-700 mb-3">Uploaded Images</label>
@@ -505,8 +650,19 @@ export default function PostProperty() {
                       const url = URL.createObjectURL(file);
                       return (
                         <div key={`${file.name}-${idx}`} className="relative group">
-                          <img src={url} alt={`Property ${idx + 1}`} className="w-full h-32 object-cover rounded-lg border border-gray-200" onLoad={() => URL.revokeObjectURL(url)} />
-                          <button type="button" onClick={() => removeImage(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">×</button>
+                          <img
+                            src={url}
+                            alt={`Property ${idx + 1}`}
+                            className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                            onLoad={() => URL.revokeObjectURL(url)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(idx)}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                          >
+                            ×
+                          </button>
                         </div>
                       );
                     })}
@@ -516,7 +672,8 @@ export default function PostProperty() {
             </div>
           </div>
         )}
-        
+
+
         {/* Step 5: Owner Info */}
         {STEPS[step - 1] === "Owner Info" && (
           <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
@@ -600,35 +757,35 @@ export default function PostProperty() {
               <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
                 <h4 className="font-bold text-lg text-blue-600 mb-3">Property Details</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><p className="text-sm text-gray-500">Title</p><p className="font-medium">{formData.title || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Description</p><p className="font-medium">{formData.description || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Available For</p><p className="font-medium">{formData.availableFor || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Preferred Tenants</p><p className="font-medium">{formData.preferredTenants || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Occupancy Type</p><p className="font-medium">{formData.occupancyType || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Sharing per Room</p><p className="font-medium">{formData.sharingCount || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Bedrooms</p><p className="font-medium">{formData.bedrooms || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Furnishing</p><p className="font-medium">{formData.roomFurnishing || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Title</p><p className="font-medium">{formData.title || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Description</p><p className="font-medium">{formData.description || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Available For</p><p className="font-medium">{formData.availableFor || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Preferred Tenants</p><p className="font-medium">{formData.preferredTenants || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Occupancy Type</p><p className="font-medium">{formData.occupancyType || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Sharing per Room</p><p className="font-medium">{formData.sharingCount || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Bedrooms</p><p className="font-medium">{formData.bedrooms || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Furnishing</p><p className="font-medium">{formData.roomFurnishing || "—"}</p></div>
                 </div>
               </div>
               <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
                 <h4 className="font-bold text-lg text-blue-600 mb-3">Location</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><p className="text-sm text-gray-500">Address</p><p className="font-medium">{formData.address || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Locality</p><p className="font-medium">{formData.locality || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">City</p><p className="font-medium">{formData.city || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Pincode</p><p className="font-medium">{formData.pincode || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Available From</p><p className="font-medium">{formData.availableFrom || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Address</p><p className="font-medium">{formData.address || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Locality</p><p className="font-medium">{formData.locality || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">City</p><p className="font-medium">{formData.city || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Pincode</p><p className="font-medium">{formData.pincode || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Available From</p><p className="font-medium">{formData.availableFrom || "—"}</p></div>
                 </div>
               </div>
               <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
                 <h4 className="font-bold text-lg text-blue-600 mb-3">Pricing</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div><p className="text-sm text-gray-500">Monthly Rent</p><p className="font-medium">₹{formData.price || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Security Deposit</p><p className="font-medium">₹{formData.deposit || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Maintenance</p><p className="font-medium">₹{formData.maintenance || "—"} {formData.maintenanceFreq ? `(${formData.maintenanceFreq})` : ""}</p></div>
-                    <div><p className="text-sm text-gray-500">Contract Duration</p><p className="font-medium">{formData.minContractDuration || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Notice Period</p><p className="font-medium">{formData.noticePeriod || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Early Leaving Charges</p><p className="font-medium">₹{formData.earlyLeavingCharges || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Monthly Rent</p><p className="font-medium">₹{formData.price || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Security Deposit</p><p className="font-medium">₹{formData.deposit || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Maintenance</p><p className="font-medium">₹{formData.maintenance || "—"} {formData.maintenanceFreq ? `(${formData.maintenanceFreq})` : ""}</p></div>
+                  <div><p className="text-sm text-gray-500">Contract Duration</p><p className="font-medium">{formData.minContractDuration || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Notice Period</p><p className="font-medium">{formData.noticePeriod || "—"}</p></div>
+                  <div><p className="text-sm text-gray-500">Early Leaving Charges</p><p className="font-medium">₹{formData.earlyLeavingCharges || "—"}</p></div>
                 </div>
               </div>
               <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
@@ -663,7 +820,7 @@ export default function PostProperty() {
             </div>
           </div>
         )}
-        
+
         {/* Navigation Buttons */}
         <div className="flex justify-between mt-8">
           {step > 1 ? (<button type="button" onClick={prevStep} disabled={uploading} className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition disabled:opacity-50">Back</button>) : (<div />)}

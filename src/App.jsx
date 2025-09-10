@@ -20,6 +20,9 @@ import Users from "./pages/Admin/Users";
 import OwnerVerification from "./pages/Admin/OwnerVerification";
 import ProfilePage from "./pages/Profile";
 import Inbox from "./pages/Inbox";
+import MyBookings from "./pages/MyBookings";
+import OwnerBookings from "./pages/OwnerBookings";
+import Wishlist from "./pages/Wishlist";
 
 function App() {
   const { user } = useAuth();
@@ -64,7 +67,14 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/login" element={<Login />} />
-             <Route path="/inbox" element={<Inbox />} />
+            <Route path="/inbox" element={<Inbox />} />
+            <Route path="/my-bookings" element={<MyBookings />} />
+            <Route path="/owner/bookings" element={<OwnerBookings />} />
+            <Route path="/wishlist" element={<Wishlist />} />
+            {/* <Route path="/wishlist" element={<TopArea />} /> */}
+
+
+
             <Route
               path="/postProperty"
               element={
@@ -73,6 +83,16 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            <Route
+              path="/edit-property/:id"
+              element={
+                <ProtectedRoute>
+                  <PostProperty />
+                </ProtectedRoute>
+              }
+            />
+
             <Route
               path="/my-properties"
               element={

@@ -2,7 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import { BedDouble, Bath, Armchair, FileText, CalendarDays, Phone, Mail, MessageCircle } from 'lucide-react'; // Optional: for icons
+import { BedDouble, Bath, Armchair, FileText, CalendarDays, Phone, Mail, MessageCircle, Heart } from 'lucide-react'; // Optional: for icons
 import { useAuth } from "../context/AuthContext";
 
 // Helper function to format the date
@@ -29,41 +29,65 @@ export default function PropertyDetails() {
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
   const { user } = useAuth();
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [bookingMsg, setBookingMsg] = useState("");
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
 
   console.log(user);
-  
 
-  const handleSendMessage = async () => {
+
+  // Send message handler
+  const handleSendBookingMessage = async () => {
     try {
-      setSending(true);
-
-      // Token localStorage ya context se le lo
       const token = localStorage.getItem("token");
-
       await API.post(
         "/messages",
         {
           propertyId: property._id,
           receiverId: property.user._id,
-          content: message,
+          content: bookingMsg,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`, // 👈 yaha token bhejna zaroori hai
-          },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      setMessage("");
-      setShowModal(false);
-      alert("Message sent successfully!");
+      setShowBookingModal(false);
+      alert("Message sent! Check your Inbox.");
       navigate("/inbox", { state: { partner: property.user._id } });
     } catch (err) {
       alert(err.response?.data?.message || "Failed to send message");
-    } finally {
-      setSending(false);
     }
   };
+
+  // Booking handler
+  const handleBookNow = async () => {
+    if (!checkIn) {
+      alert("Choose a check-in date");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token");
+      await API.post(
+        "/bookings",
+        {
+          propertyId: property._id,
+          ownerId: property.user._id,
+          checkIn,
+          checkOut,
+          note: bookingMsg,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setShowBookingModal(false);
+      alert("Booking request sent!");
+      navigate("/my-bookings");
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to create booking");
+    }
+  };
+
 
 
   useEffect(() => {
@@ -72,6 +96,21 @@ export default function PropertyDetails() {
         setLoading(true);
         const res = await API.get(`/properties/${id}`);
         setProperty(res.data);
+
+
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            const wishlistRes = await API.get("/wishlist", {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            const wishlistIds = wishlistRes.data.map((p) => p._id);
+            setIsSaved(wishlistIds.includes(res.data._id));
+          } catch (err) {
+            console.error("Wishlist fetch error:", err);
+          }
+        }
+
         setError("");
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load property");
@@ -82,6 +121,38 @@ export default function PropertyDetails() {
     };
     fetchProperty();
   }, [id]);
+
+
+  // ✅ Toggle Save/Unsave
+  const toggleSave = async () => {
+    if (loading) return;
+    // setLoading(true);
+
+    try {
+      const token = localStorage.getItem("token"); // or from AuthContext
+      if (!token) {
+        console.error("User not logged in");
+        return;
+      }
+
+      const config = {
+        headers: { Authorization: `Bearer ${token}` },
+      };
+
+      if (!isSaved) {
+        await API.post(`/wishlist/${property._id}`, {}, config);
+        setIsSaved(true);
+      } else {
+        await API.delete(`/wishlist/${property._id}`, config);
+        setIsSaved(false);
+      }
+    } catch (error) {
+      console.error("Error toggling save:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   if (loading) {
     return <div className="flex items-center justify-center h-[60vh] text-lg text-gray-700">Loading property details...</div>;
@@ -111,11 +182,35 @@ export default function PropertyDetails() {
             </p>
           </div>
 
+          {/* <button
+            onClick={toggleSave}
+            disabled={wishlistLoading}
+            className="ml-4 text-red-500 hover:scale-110 transition"
+          >
+            <Heart
+              className={`w-8 h-8 ${isSaved ? "fill-red-500" : "fill-none"}`}
+            />
+          </button> */}
+
           <div className="lg:flex">
             {/* Left Column: Image Gallery */}
             <div className="lg:w-3/5 p-6">
               <div className="sticky top-24">
                 <img src={mainImage} alt="Main property view" className="w-full h-96 object-cover rounded-xl shadow-md border" />
+
+                <button
+                  onClick={toggleSave}
+                  className="absolute top-3 left-3 bg-white/90 rounded-full p-2 shadow-md hover:bg-white transition"
+                  disabled={wishlistLoading}
+                >
+                  {isSaved ? (
+                    <Heart className="w-5 h-5 text-red-500" fill="currentColor" />
+                  ) : (
+                    <Heart className="w-5 h-5 text-gray-500" fill="none" />
+                  )}
+
+                </button>
+
                 {property.images && property.images.length > 1 && (
                   <div className="flex space-x-2 mt-4 overflow-x-auto pb-2">
                     {property.images.map((img, idx) => (
@@ -127,6 +222,9 @@ export default function PropertyDetails() {
                         className={`w-24 h-24 object-cover rounded-lg cursor-pointer border-2 ${activeImage === idx ? 'border-blue-500' : 'border-transparent'}`}
                         loading="lazy"
                       />
+
+
+
                     ))}
                   </div>
                 )}
@@ -231,48 +329,78 @@ export default function PropertyDetails() {
                       {property.user.ownerKYC.ownerEmail}
                     </a>
                   </p>
-                  {user?._id !== property.user._id && (
-                    <button
-                      onClick={() => setShowModal(true)}
-                      className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition shadow-md flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="w-5 h-5" />
-                      Contact Owner
+
+
+                  {user && user._id !== property.user._id && (
+                    <button onClick={() => setShowBookingModal(true)} className="w-full bg-green-600 ...">
+                      Request to Book
                     </button>
                   )}
+
+
                 </div>
               )}
 
-              {/* Modal */}
-              {showModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-xl p-6 w-96 shadow-lg">
-                    <h2 className="text-lg font-semibold mb-3">Send Message to {property.user.name}</h2>
+
+              {showBookingModal && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+                  <div className="bg-white rounded-xl p-6 w-96">
+                    <h3 className="text-lg font-semibold mb-3">Request to Book</h3>
+
+                    {/* Tab 1: Message to Owner */}
                     <textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="Type your message..."
-                      className="w-full border rounded-lg p-2 focus:ring focus:ring-blue-300"
+                      value={bookingMsg}
+                      onChange={(e) => setBookingMsg(e.target.value)}
                       rows={4}
+                      placeholder="Add a note / Ask a question to owner..."
+                      className="w-full border rounded-lg p-2 mb-4"
                     />
-                    <div className="flex justify-end gap-2 mt-4">
+
+                    {/* Dates Section */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium">Check-in Date</label>
+                      <input
+                        type="date"
+                        value={checkIn}
+                        onChange={(e) => setCheckIn(e.target.value)}
+                        className="w-full border rounded-lg p-2"
+                      />
+                    </div>
+
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium">Check-out Date</label>
+                      <input
+                        type="date"
+                        value={checkOut}
+                        onChange={(e) => setCheckOut(e.target.value)}
+                        className="w-full border rounded-lg p-2"
+                      />
+                    </div>
+
+
+                    <div className="flex justify-between">
+                      {/* Send Message Button */}
                       <button
-                        onClick={() => setShowModal(false)}
-                        className="px-4 py-2 bg-gray-200 rounded-lg"
+                        onClick={handleSendBookingMessage}
+                        disabled={!bookingMsg.trim()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
                       >
-                        Cancel
+                        Message Owner
                       </button>
+
+                      {/* Book Now Button */}
                       <button
-                        onClick={handleSendMessage}
-                        disabled={sending || !message.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                        onClick={handleBookNow}
+                        className="px-4 py-2 bg-green-600 text-white rounded"
                       >
-                        {sending ? "Sending..." : "Send"}
+                        Book Now
                       </button>
                     </div>
+
                   </div>
                 </div>
               )}
+
 
             </div>
           </div>

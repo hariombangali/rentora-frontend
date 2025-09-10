@@ -2,6 +2,13 @@ import { useState, useEffect } from "react";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { FaUser, FaLock, FaHome, FaBookmark, FaWallet, FaBell, FaCheckCircle, FaSignOutAlt } from 'react-icons/fa';
+import MyBookings from "./MyBookings";
+import Inbox from "./Inbox";
+import MyProperties from "./MyProperties"; // new wrapper
+import OwnerBookings from "./OwnerBookings";
+import Wishlist from "./Wishlist";
+
+
 
 export default function ProfilePage() {
   const { user, setUser } = useAuth();
@@ -30,13 +37,15 @@ export default function ProfilePage() {
   const SIDEBAR_TABS = [
     { key: "profile", label: "Profile", icon: <FaUser /> },
     user?.role === "owner" && { key: "myProperties", label: "My Properties", icon: <FaHome /> },
-    { key: "savedSearches", label: "Saved Searches", icon: <FaBookmark /> },
-    { key: "payments", label: "Payments", icon: <FaWallet /> },
+    { key: "myBookings", label: "My Bookings", icon: <FaBookmark /> },
+    { key: "savedproperties", label: "Saved properties", icon: <FaBookmark /> },
+    { key: "inbox", label: "Inbox", icon: <FaBell /> },
     { key: "notifications", label: "Notifications", icon: <FaBell /> },
     { key: "password", label: "Change Password", icon: <FaLock /> },
     user?.role === "owner" && { key: "verification", label: "Owner Verification", icon: <FaCheckCircle /> },
     { key: "logout", label: "Logout", icon: <FaSignOutAlt /> },
-  ].filter(Boolean); // removes falsy values
+  ].filter(Boolean);
+
 
   useEffect(() => {
     if (user) {
@@ -151,9 +160,8 @@ export default function ProfilePage() {
               <li key={key} className="mb-2">
                 <button
                   onClick={() => handleSidebarClick(key)}
-                  className={`flex items-center gap-3 w-full p-3 rounded-lg transition font-semibold text-left ${
-                    activeTab === key ? "bg-blue-600 text-white shadow-lg" : "text-gray-700 hover:bg-blue-100"
-                  }`}
+                  className={`flex items-center gap-3 w-full p-3 rounded-lg transition font-semibold text-left ${activeTab === key ? "bg-blue-600 text-white shadow-lg" : "text-gray-700 hover:bg-blue-100"
+                    }`}
                 >
                   <span className="text-lg">{icon}</span>
                   <span>{label}</span>
@@ -163,7 +171,6 @@ export default function ProfilePage() {
           </ul>
         </nav>
 
-        {/* Main Content */}
         <main className="flex-1 bg-white rounded-lg shadow p-6 max-w-4xl">
           {error && <div className="mb-4 p-3 bg-red-100 text-red-700 rounded font-semibold">{error}</div>}
           {successMsg && <div className="mb-4 p-3 bg-green-100 text-green-700 rounded font-semibold">{successMsg}</div>}
@@ -310,21 +317,31 @@ export default function ProfilePage() {
             <VerificationStatus user={user} />
           )}
 
-          {/* Placeholder for other tabs like My Properties, Saved Searches etc. */}
           {activeTab === "myProperties" && user?.role === "owner" && (
-            <div>Your properties list component here (implement as needed)</div>
-          )}
-          {activeTab === "savedSearches" && (
-            <div>Your saved searches component here (implement as needed)</div>
-          )}
-          {activeTab === "payments" && (
-            <div>Your payments component here (implement as needed)</div>
-          )}
-          {activeTab === "notifications" && (
-            <div>Your notifications component here (implement as needed)</div>
+            <MyProperties />
           )}
 
+          {activeTab === "myBookings" && (user?.role === "owner" ? <OwnerBookings /> : <MyBookings />)}
+
+          {activeTab === "savedproperties" && (
+            <Wishlist />
+          )}
+
+          {activeTab === "inbox" && (
+            <Inbox />
+          )}
+
+          {activeTab === "payments" && (
+            <Payments />
+          )}
+
+          {activeTab === "notifications" && (
+            <Notifications />
+          )}
         </main>
+
+
+
       </div>
     </div>
   );
@@ -441,9 +458,8 @@ function VerificationStatus({ user }) {
 
       <div className="mb-4 p-4 rounded bg-yellow-100 text-yellow-800 font-semibold shadow">
         Your owner verification status is:{" "}
-        <span className={`font-black ${
-          user.ownerVerified ? "text-green-600" : (user.ownerRejected ? "text-red-600" : "text-yellow-600")
-        }`}>
+        <span className={`font-black ${user.ownerVerified ? "text-green-600" : (user.ownerRejected ? "text-red-600" : "text-yellow-600")
+          }`}>
           {user.ownerVerified
             ? "Verified"
             : user.ownerRejected

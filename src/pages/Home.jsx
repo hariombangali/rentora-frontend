@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import API from '../services/api';
-import { Link, useNavigate  } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import PropertyCard from '../components/PropertyCard.jsx';
 import PropertiesMap from '../components/PropertiesMap.jsx';
+import TopArea from '../components/TopArea.jsx';
 
 export default function Home() {
 
-    const navigate = useNavigate(); 
+  const navigate = useNavigate();
   const [data, setData] = useState({
     topAreas: [],
     benefits: [],
@@ -16,10 +17,10 @@ export default function Home() {
     testimonials: [],
     counters: { tenants: 0, verifiedProperties: 0, localities: 0 }
   });
-
+  const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-    const [searchLocation, setSearchLocation] = useState('');
+  const [searchLocation, setSearchLocation] = useState('');
   const [searchType, setSearchType] = useState('');
 
   useEffect(() => {
@@ -46,6 +47,14 @@ export default function Home() {
       ]);
 
       const next = { ...data };
+
+      const token = localStorage.getItem("token");
+      if (token) {
+        const res = await API.get("/wishlist", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setWishlistIds(res.data.map((p) => p._id));
+      }
 
       // /home
       if (homeRes.status === 'fulfilled') {
@@ -104,7 +113,7 @@ export default function Home() {
     }
     if (searchType) {
       // Use 'occupancyType' to match the backend schema/filter
-      queryParams.append('occupancyType', searchType); 
+      queryParams.append('occupancyType', searchType);
     }
 
     // Navigate to the properties page with the search query
@@ -120,7 +129,13 @@ export default function Home() {
       {/* Hero */}
       <section className="relative bg-blue-900 text-white py-20 overflow-hidden">
         <div className="absolute inset-0 bg-black/50">
-          <img src="/indore-skyline.jpg" alt="Indore" className="w-full h-full object-cover" />
+          <img
+            src="https://vibrantgroup.co/project_img/1710243638_2.jpg"
+            alt="Indore skyline at dusk"
+            className="absolute inset-0 w-full h-full object-cover"
+            fetchpriority="high"
+            decoding="async"
+          />
         </div>
         <div className="max-w-6xl mx-auto relative z-10 px-4">
           <div className="text-center mb-8">
@@ -131,7 +146,7 @@ export default function Home() {
           {/* Quick Search (wire to navigate with URL params when you’re ready) */}
           <div className="bg-white rounded-xl shadow-xl p-4 max-w-4xl mx-auto">
             <div className="flex flex-col md:flex-row gap-2">
-              <select 
+              <select
                 className="flex-1 p-3 border rounded-lg text-gray-800"
                 value={searchLocation}
                 onChange={(e) => setSearchLocation(e.target.value)}
@@ -141,7 +156,7 @@ export default function Home() {
                   <option key={area.name} value={area.name}>{area.name}</option>
                 ))}
               </select>
-              <select 
+              <select
                 className="flex-1 p-3 border rounded-lg text-gray-800"
                 value={searchType}
                 onChange={(e) => setSearchType(e.target.value)}
@@ -151,7 +166,7 @@ export default function Home() {
                 <option value="room">Room</option>
                 <option value="pg">PG</option>
               </select>
-              <button 
+              <button
                 onClick={handleSearch}
                 className="bg-yellow-400 text-blue-900 font-bold py-3 px-6 rounded-lg hover:bg-yellow-300 transition"
               >
@@ -178,9 +193,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Top Areas (now dynamic) */}
+      {/* Top Areas */}
       <section className="max-w-6xl mx-auto mt-12 px-4">
-        <h2 className="text-2xl font-bold mb-6 text-blue-800 text-center">Top Areas in Indore</h2>
+        {/* <h2 className="text-2xl font-bold mb-6 text-blue-800 text-center">Top Areas in Indore</h2>
         <div className="flex gap-6 overflow-x-auto scrollbar-hide px-2 justify-center" style={{ scrollSnapType: "x mandatory" }}>
           {data.topAreas.map(area => (
             <Link
@@ -193,7 +208,8 @@ export default function Home() {
               {area.count ? <span className="mt-1 text-blue-700 text-sm">{area.count} listings</span> : <span className="mt-1 text-blue-700 underline text-sm">Browse</span>}
             </Link>
           ))}
-        </div>
+        </div> */}
+        <TopArea areas={data.topAreas} />
       </section>
 
       {/* Property Types (unchanged) */}
@@ -231,7 +247,7 @@ export default function Home() {
           <div className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide">
             {(data.featured || []).map((property, i) => (
               <div key={`${property._id}-${i}`} className="min-w-[300px]">
-                <PropertyCard property={property} />
+                <PropertyCard property={property} wishlistIds={wishlistIds} />
               </div>
             ))}
           </div>
@@ -312,18 +328,18 @@ export default function Home() {
         <h2 className="text-2xl font-bold text-blue-900 mb-8 text-center">Rental Tips & News</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {[
-            { 
-              title: "How to Choose the Right PG in Indore", 
+            {
+              title: "How to Choose the Right PG in Indore",
               excerpt: "Essential factors to consider when selecting a paying guest accommodation...",
               image: "pg-tips.jpg"
             },
-            { 
-              title: "Rental Trends in Indore 2023", 
+            {
+              title: "Rental Trends in Indore 2023",
               excerpt: "Latest insights on rental prices and popular localities in the city...",
               image: "trends.jpg"
             },
-            { 
-              title: "Tenant Rights You Should Know", 
+            {
+              title: "Tenant Rights You Should Know",
               excerpt: "Understanding your legal rights as a tenant in Madhya Pradesh...",
               image: "rights.jpg"
             }
@@ -351,7 +367,7 @@ export default function Home() {
             List Your Property
           </button>
         </div>
-        
+
         <div className="bg-white border border-blue-100 rounded-2xl p-8 shadow-lg">
           <h3 className="text-2xl font-bold text-blue-900 mb-4">Need Help Finding a Home?</h3>
           <p className="mb-6 text-gray-700">Our rental experts can help you find the perfect place</p>
