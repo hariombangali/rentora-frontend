@@ -99,7 +99,7 @@ export default function PostProperty() {
           const newFiles = Array.from(files);
           setFormData((prev) => ({ ...prev, images: [...prev.images, ...newFiles].slice(0, 8) }));
         } else {
-          setFormData((prev) => ({ ...prev, [name]: files }));
+          setFormData((prev) => ({ ...prev, [name]: files[0] }));    
         }
       } else {
         setField(name, value);
