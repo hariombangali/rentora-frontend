@@ -23,6 +23,16 @@ export default function Navbar() {
   const isHome = location.pathname === "/";
   const isProperties = location.pathname === "/properties";
 
+  // Derived user info with fallbacks
+  const displayName =
+    user?.name ||
+    user?.username ||
+    user?.displayName ||
+    (user?.email ? user.email.split("@")[0] : "Account");
+
+  const avatarUrl =
+    user?.avatar || user?.photoURL || user?.profilePic || user?.image || "";
+
   // Scroll detection only on Home
   useEffect(() => {
     if (!isHome) return;
@@ -43,6 +53,15 @@ export default function Navbar() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Close account dropdown on ESC
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") setAccountDropdown(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, []);
 
   // Suggestions only when typing and query length > 1
@@ -131,22 +150,12 @@ export default function Navbar() {
     }
   }, [mobileMenu]);
 
-  // Allow ESC to close mobile menu
-  useEffect(() => {
-    if (!mobileMenu) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") setMobileMenu(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [mobileMenu]);
-
   const NavLinks = ({ linkClass = "", onClick }) => (
     <>
-      <Link to="/" className={linkClass} onClick={onClick}>Home</Link>
+      {/* <Link to="/" className={linkClass} onClick={onClick}>Home</Link> */}
       <Link to="/properties" className={linkClass} onClick={onClick}>Properties</Link>
-      <Link to="/about" className={linkClass} onClick={onClick}>About</Link>
-      {user && <Link to="/wishlist" className={linkClass} onClick={onClick}>Wishlist</Link>}
+      {/* <Link to="/about" className={linkClass} onClick={onClick}>About</Link> */}
+      {user && <Link to="/wishlist" className={linkClass} onClick={onClick}>Saved</Link>}
     </>
   );
 
@@ -161,7 +170,81 @@ export default function Navbar() {
     </button>
   );
 
-  // If NOT home → sticky navbar (unchanged design)
+  // User menu trigger (desktop)
+  const UserMenu = ({ textColor = "text-blue-900" }) => (
+    <div className="relative" ref={accountRef}>
+      <button
+        type="button"
+        className={`flex items-center gap-2 rounded-full px-2 py-1 hover:bg-blue-50 ${textColor}`}
+        aria-haspopup="menu"
+        aria-expanded={accountDropdown ? "true" : "false"}
+        onClick={() => setAccountDropdown((s) => !s)}
+      >
+        <img
+          src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=E5E7EB&color=1F2937`}
+          alt="Profile"
+          className="h-8 w-8 rounded-full object-cover"
+        />
+        <span className="text-sm font-semibold truncate max-w-[120px]">{displayName}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+
+      {accountDropdown && (
+        <div
+          role="menu"
+          aria-label="Account menu"
+          className="absolute right-0 mt-2 w-72 rounded-lg border border-gray-200 bg-white shadow-lg z-[70]"
+        >
+          <div className="flex items-center gap-3 p-3">
+            <img
+              src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=E5E7EB&color=1F2937`}
+              alt="Profile"
+              className="h-10 w-10 rounded-full object-cover"
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.email || "—"}</p>
+            </div>
+          </div>
+          <div className="h-px bg-gray-200" />
+          <ul className="py-1 text-sm text-blue-900">
+            <li>
+              <Link to="/profile" role="menuitem" className="block px-4 py-2 hover:bg-blue-50">
+                Profile
+              </Link>
+            </li>
+            <li>
+              <Link to="/wishlist" role="menuitem" className="block px-4 py-2 hover:bg-blue-50">
+                Wishlist
+              </Link>
+            </li>
+            <li>
+              <Link to="/about" role="menuitem" className="block px-4 py-2 hover:bg-blue-50">
+                About
+              </Link>
+            </li>
+            <li>
+              <Link to="/help" role="menuitem" className="block px-4 py-2 hover:bg-blue-50">
+                Help Center
+              </Link>
+            </li>
+          </ul>
+          <div className="h-px bg-gray-200" />
+          <div className="p-2">
+            <button
+              role="menuitem"
+              onClick={handleLogout}
+              className="w-full text-left px-3 py-2 rounded-md text-red-600 hover:bg-red-50"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // If NOT home → sticky navbar
   if (!isHome) {
     return (
       <>
@@ -186,16 +269,17 @@ export default function Navbar() {
                 />
                 <button type="submit" className="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full">🔍</button>
               </div>
-              {/* Suggestions not shown on Properties page to keep UI clean */}
             </form>
 
-            {/* Desktop links */}
+            {/* Desktop links + user menu */}
             <div className="hidden md:flex gap-6 items-center font-semibold text-blue-900">
               <NavLinks />
               {user ? (
                 <>
-                  <Link to="/postProperty" className="bg-blue-600 text-white px-4 py-1.5 rounded-full">Post Property</Link>
-                  <button onClick={handleLogout} className="hover:text-yellow-500">Logout</button>
+                  <Link to="/postProperty" className="bg-blue-600 text-white px-4 py-1.5 rounded-full">
+                    Post Property
+                  </Link>
+                  <UserMenu />
                 </>
               ) : (
                 <Link to="/login" className="hover:text-yellow-500">Login</Link>
@@ -222,7 +306,7 @@ export default function Navbar() {
             </div>
 
             <div className="p-4 space-y-6">
-              {/* Mobile search (no suggestions on Properties to keep parity) */}
+              {/* Mobile search */}
               <form onSubmit={handleSearch} className="relative">
                 <div className="flex items-center border border-blue-200 rounded-full px-3 py-2 bg-white">
                   <input
@@ -238,21 +322,51 @@ export default function Navbar() {
                 </div>
               </form>
 
+              {/* Mobile account section */}
+              {user && (
+                <div className="rounded-lg border border-gray-200 p-3">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=E5E7EB&color=1F2937`}
+                      alt="Profile"
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+                      <p className="text-xs text-gray-500 truncate">{user?.email || "—"}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <Link to="/profile" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                      Profile
+                    </Link>
+                    <Link to="/wishlist" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                      Wishlist
+                    </Link>
+                    <Link to="/about" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                      About
+                    </Link>
+                    <Link to="/help" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                      Help
+                    </Link>
+                  </div>
+                  <button onClick={handleLogout} className="mt-3 w-full px-3 py-2 rounded-md text-red-600 bg-red-50">
+                    Logout
+                  </button>
+                </div>
+              )}
+
+              {/* Mobile nav links */}
               <div className="flex flex-col gap-4 font-semibold text-blue-900">
                 <NavLinks linkClass="px-2 py-2 rounded hover:bg-blue-50" onClick={() => setMobileMenu(false)} />
                 {user ? (
-                  <>
-                    <Link
-                      to="/postProperty"
-                      className="text-center bg-blue-600 text-white px-4 py-2 rounded-full"
-                      onClick={() => setMobileMenu(false)}
-                    >
-                      Post Property
-                    </Link>
-                    <button onClick={handleLogout} className="text-left px-2 py-2 rounded hover:bg-blue-50">
-                      Logout
-                    </button>
-                  </>
+                  <Link
+                    to="/postProperty"
+                    className="text-center bg-blue-600 text-white px-4 py-2 rounded-full"
+                    onClick={() => setMobileMenu(false)}
+                  >
+                    Post Property
+                  </Link>
                 ) : (
                   <Link
                     to="/login"
@@ -270,7 +384,7 @@ export default function Navbar() {
     );
   }
 
-  // Home → transparent + sticky logic (design unchanged)
+  // Home → transparent + sticky logic
   return (
     <>
       {!showSticky && (
@@ -283,11 +397,14 @@ export default function Navbar() {
             <div className="hidden md:flex gap-6 font-semibold">
               <NavLinks linkClass="hover:text-yellow-400" />
             </div>
+
             <div className="hidden md:flex gap-2 items-center">
               {user ? (
                 <>
-                  <Link to="/postProperty" className="bg-yellow-400 text-blue-900 px-4 py-1.5 rounded-full">Post Property</Link>
-                  <button onClick={handleLogout} className="hover:text-yellow-400">Logout</button>
+                  <Link to="/postProperty" className="bg-yellow-400 text-blue-900 px-4 py-1.5 rounded-full">
+                    Post Property
+                  </Link>
+                  <UserMenu textColor="text-white" />
                 </>
               ) : (
                 <Link to="/login" className="hover:text-yellow-400">Login</Link>
@@ -322,7 +439,6 @@ export default function Navbar() {
                 <button type="submit" className="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full">🔍</button>
               </div>
 
-              {/* Suggestions shown ONLY on Home */}
               {showSuggestions && suggestions.length > 0 && (
                 <ul className="absolute top-full mt-2 w-full max-w-lg bg-white border border-gray-200 rounded-lg shadow-md z-50">
                   {suggestions.map((s, i) => (
@@ -338,13 +454,15 @@ export default function Navbar() {
               )}
             </form>
 
-            {/* Desktop links */}
+            {/* Desktop links + user menu */}
             <div className="hidden md:flex gap-6 items-center font-semibold text-blue-900">
               <NavLinks />
               {user ? (
                 <>
-                  <Link to="/postProperty" className="bg-blue-600 text-white px-4 py-1.5 rounded-full">Post Property</Link>
-                  <button onClick={handleLogout} className="hover:text-yellow-500">Logout</button>
+                  <Link to="/postProperty" className="bg-blue-600 text-white px-4 py-1.5 rounded-full">
+                    Post Property
+                  </Link>
+                  <UserMenu />
                 </>
               ) : (
                 <Link to="/login" className="hover:text-yellow-500">Login</Link>
@@ -357,7 +475,7 @@ export default function Navbar() {
         </nav>
       )}
 
-      {/* Mobile overlay menu (Home, both transparent and sticky) */}
+      {/* Mobile overlay menu (Home) */}
       {mobileMenu && (
         <div className="fixed inset-0 z-[60] bg-white">
           <div className="flex items-center justify-between px-4 py-3 border-b">
@@ -402,21 +520,51 @@ export default function Navbar() {
               )}
             </form>
 
+            {/* Mobile account section */}
+            {user && (
+              <div className="rounded-lg border border-gray-200 p-3">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=E5E7EB&color=1F2937`}
+                    alt="Profile"
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{displayName}</p>
+                    <p className="text-xs text-gray-500 truncate">{user?.email || "—"}</p>
+                  </div>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                  <Link to="/profile" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                    Profile
+                  </Link>
+                  <Link to="/wishlist" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                    Wishlist
+                  </Link>
+                  <Link to="/about" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                    About
+                  </Link>
+                  <Link to="/help" className="px-3 py-2 rounded-md bg-blue-50 text-blue-900 text-center" onClick={() => setMobileMenu(false)}>
+                    Help
+                  </Link>
+                </div>
+                <button onClick={handleLogout} className="mt-3 w-full px-3 py-2 rounded-md text-red-600 bg-red-50">
+                  Logout
+                </button>
+              </div>
+            )}
+
+            {/* Mobile nav links */}
             <div className="flex flex-col gap-4 font-semibold text-blue-900">
               <NavLinks linkClass="px-2 py-2 rounded hover:bg-blue-50" onClick={() => setMobileMenu(false)} />
               {user ? (
-                <>
-                  <Link
-                    to="/postProperty"
-                    className="text-center bg-blue-600 text-white px-4 py-2 rounded-full"
-                    onClick={() => setMobileMenu(false)}
-                  >
-                    Post Property
-                  </Link>
-                  <button onClick={handleLogout} className="text-left px-2 py-2 rounded hover:bg-blue-50">
-                    Logout
-                  </button>
-                </>
+                <Link
+                  to="/postProperty"
+                  className="text-center bg-blue-600 text-white px-4 py-2 rounded-full"
+                  onClick={() => setMobileMenu(false)}
+                >
+                  Post Property
+                </Link>
               ) : (
                 <Link
                   to="/login"
