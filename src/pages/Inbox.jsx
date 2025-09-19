@@ -5,7 +5,7 @@ import { useLocation } from "react-router-dom";
 
 // Helpers
 const initials = (name = "U") =>
-  name.trim().split(/\s+/).map((s) => s?.toUpperCase()).slice(0, 2).join("") || "U";
+  name.trim().split(/\s+/).map((s) => s?.[0]?.toUpperCase() || "").slice(0, 2).join("") || "U";
 
 const formatTime = (iso) =>
   iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
@@ -105,6 +105,14 @@ export default function Inbox() {
           headers: { Authorization: `Bearer ${token}` },
         });
         setMessages(res.data || []);
+        // Mark as read locally (optional visual)
+        setConversations((prev) =>
+          prev.map((c) =>
+            convKeyOf(c) === convKeyOf(selectedConversation)
+              ? { ...c, unreadCount: 0 }
+              : c
+          )
+        );
         requestAnimationFrame(() => {
           listRef.current?.scrollTo({
             top: listRef.current.scrollHeight,
@@ -137,7 +145,7 @@ export default function Inbox() {
       });
       setMessages((prev) => [...prev, res.data]);
       setNewMessage("");
-      // If this conversation was a stub (no lastMessage), make sure it appears in list with preview
+      // Ensure list preview updates
       setConversations((prev) => {
         const key = convKeyOf(selectedConversation);
         const next = [...prev];
@@ -181,10 +189,20 @@ export default function Inbox() {
   );
   const headerProp = selectedConversation?.property?.title || "Property";
 
+  // Responsive master-detail:
+  // - Mobile: show only list OR chat (back button in chat header)
+  // - md+: show both panes
+  const showListMobile = !selectedConversation;
+  const showChatMobile = !!selectedConversation;
+
   return (
-    <div className="flex h-[90vh] bg-gradient-to-b from-gray-50 to-gray-100">
-      {/* Sidebar */}
-      <aside className="w-full md:w-1/3 lg:w-1/4 bg-white border-r border-gray-200 flex flex-col">
+    <div className="flex h-[100dvh] bg-gradient-to-b from-gray-50 to-gray-100">
+      {/* List pane */}
+      <aside
+        className={`${
+          showListMobile ? "flex" : "hidden"
+        } md:flex md:w-1/3 lg:w-1/4 w-full bg-white border-r border-gray-200 flex-col`}
+      >
         <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b px-4 py-3">
           <h2 className="font-semibold text-lg tracking-tight">Inbox</h2>
           <div className="mt-3 relative">
@@ -276,13 +294,26 @@ export default function Inbox() {
         </div>
       </aside>
 
-      {/* Chat Window */}
-      <section className="flex-1 flex flex-col">
+      {/* Chat pane */}
+      <section
+        className={`${
+          showChatMobile ? "flex" : "hidden"
+        } md:flex flex-1 flex-col min-w-0`}
+      >
         {selectedConversation ? (
           <>
             {/* Header */}
             <div className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur px-4 py-3">
               <div className="flex items-center gap-3">
+                {/* Back on mobile */}
+                <button
+                  className="md:hidden -ml-2 mr-1 px-2 py-1 rounded hover:bg-gray-100"
+                  onClick={() => setSelectedConversation(null)}
+                  aria-label="Back to conversations"
+                  type="button"
+                >
+                  ←
+                </button>
                 <div className="w-9 h-9 rounded-full bg-gray-200 grid place-items-center text-sm font-semibold">
                   {initials(headerName)}
                 </div>
@@ -333,7 +364,7 @@ export default function Inbox() {
                         </div>
                       )}
                       <div
-                        className={`max-w-[75%] md:max-w-[65%] rounded-2xl px-4 py-2.5 shadow-sm transition ${
+                        className={`max-w-[85%] sm:max-w-[75%] md:max-w-[65%] rounded-2xl px-4 py-2.5 shadow-sm transition ${
                           mine
                             ? "bg-blue-600 text-white rounded-br-md"
                             : "bg-gray-100 text-gray-900 rounded-bl-md"
@@ -357,7 +388,10 @@ export default function Inbox() {
             </div>
 
             {/* Composer */}
-            <div className="border-t bg-white/80 backdrop-blur px-3 py-3 sticky bottom-0">
+            <div
+              className="border-t bg-white/80 backdrop-blur px-3 py-3 sticky bottom-0"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+            >
               <div className="flex items-center gap-2">
                 <button
                   className="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-gray-200 hover:bg-gray-50"
@@ -384,7 +418,9 @@ export default function Inbox() {
                   {sending ? "Sending…" : "Send"}
                 </button>
               </div>
-              <p className="mt-1 text-[11px] text-gray-500">Press Enter to send • Shift+Enter for newline</p>
+              <p className="mt-1 text-[11px] text-gray-500">
+                Press Enter to send • Shift+Enter for newline
+              </p>
             </div>
           </>
         ) : (
