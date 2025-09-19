@@ -19,7 +19,7 @@ L.Icon.Default.mergeOptions({
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 });
-// --- END OF FIX ---
+
 
 
 export default function PropertiesMap() {
@@ -37,6 +37,8 @@ export default function PropertiesMap() {
     fetchPropertiesForMap();
   }, []);
 
+  
+
   // Set the initial map position (e.g., center of Indore)
   const initialPosition = [22.7196, 75.8577];
 
@@ -47,32 +49,44 @@ export default function PropertiesMap() {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
       
-      {properties.map(property => (
-        // Check if the property and its coordinates exist before rendering a marker
-        property.location?.coordinates && (
-          <Marker
-            key={property._id}
-            position={[property.location.coordinates[1], property.location.coordinates[0]]} // Leaflet uses [latitude, longitude]
-          >
-            <Popup>
-              <div className="w-48">
-                <img 
-                  src={property.images?.[0] ? `${API.defaults.baseURL.replace('/api', '')}/uploads/${property.images[0]}` : '/default-property.jpg'}
-                  alt={property.title}
-                  className="w-full h-24 object-cover rounded-md mb-2"
-                />
-                <h4 className="font-bold text-md mb-1 line-clamp-1">{property.title}</h4>
-                <p className="text-sm text-gray-700 mb-2">
-                  {`₹${property.price.toLocaleString('en-IN')}/mo`}
-                </p>
-                <Link to={`/properties/${property._id}`} className="text-blue-600 font-semibold hover:underline">
-                  View Details &rarr;
-                </Link>
-              </div>
-            </Popup>
-          </Marker>
-        )
-      ))}
+{properties.map((property) => {
+  const coords = property.location?.coordinates;
+  if (!coords || coords.length < 2) return null; // Skip if invalid
+
+  const lat = coords[1];
+  const lng = coords[0];
+
+  // Extra safety: ensure they are numbers
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+
+  return (
+    <Marker
+      key={property._id}
+      position={[lat, lng]}
+    >
+      <Popup>
+        <div className="w-48">
+          <img 
+            src={property.images?.[0] 
+              ? `${API.defaults.baseURL.replace('/api', '')}/uploads/${property.images[0]}`
+              : '/default-property.jpg'
+            }
+            alt={property.title}
+            className="w-full h-24 object-cover rounded-md mb-2"
+          />
+          <h4 className="font-bold text-md mb-1 line-clamp-1">{property.title}</h4>
+          <p className="text-sm text-gray-700 mb-2">
+            {`₹${property.price.toLocaleString('en-IN')}/mo`}
+          </p>
+          <Link to={`/properties/${property._id}`} className="text-blue-600 font-semibold hover:underline">
+            View Details →
+          </Link>
+        </div>
+      </Popup>
+    </Marker>
+  );
+})}
+
     </MapContainer>
   );
 }

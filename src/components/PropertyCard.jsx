@@ -53,11 +53,12 @@ export default function PropertyCard({ property, wishlistIds = [] }) {
   };
 
   // Construct the image URL safely
-  const firstImage =
-    property.images && property.images.length > 0
-      ? `${API.defaults.baseURL.replace("/api", "")}/uploads/${property.images[0]
-      }`
-      : "/default-property.jpg";
+// Construct the image URL safely
+const firstImage =
+  property.images && property.images.length > 0
+    ? property.images[0] // Cloudinary URL
+    : "/default-property.jpg";
+
 
   // Combine amenities
   const allAmenities = [

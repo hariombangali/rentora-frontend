@@ -189,7 +189,7 @@ export default function MyProperties() {
           </p>
         </div>
         <Link
-          to="/post-property"
+          to="/postProperty"
           className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700"
         >
           + Post Property
@@ -312,7 +312,7 @@ export default function MyProperties() {
           {filtered.map((p) => {
             const firstImage =
               p.images && p.images.length > 0
-                ? `${API.defaults.baseURL.replace("/api", "")}/uploads/${p.images[0]}`
+                ? p.images[0]
                 : "/default-property.jpg";
 
             return (

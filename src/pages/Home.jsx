@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import PropertyCard from '../components/PropertyCard.jsx';
 import PropertiesMap from '../components/PropertiesMap.jsx';
 import TopArea from '../components/TopArea.jsx';
+import FullPageLoader from "../components/FullPageLoader";
 
 export default function Home() {
 
@@ -103,7 +104,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }
+  } 
 
   const handleSearch = () => {
     const queryParams = new URLSearchParams();
@@ -121,7 +122,7 @@ export default function Home() {
   };
 
 
-  if (loading) return <div className="p-6 text-center">Loading...</div>;
+  if (loading) return <FullPageLoader message="Loading Dashboard..." />;
   if (error) return <div className="p-6 text-center text-red-600">{error}</div>;
 
   return (
@@ -133,7 +134,7 @@ export default function Home() {
             src="https://vibrantgroup.co/project_img/1710243638_2.jpg"
             alt="Indore skyline at dusk"
             className="absolute inset-0 w-full h-full object-cover"
-            fetchpriority="high"
+            fetchPriority="high"
             decoding="async"
           />
         </div>
@@ -195,20 +196,6 @@ export default function Home() {
 
       {/* Top Areas */}
       <section className="max-w-6xl mx-auto mt-12 px-4">
-        {/* <h2 className="text-2xl font-bold mb-6 text-blue-800 text-center">Top Areas in Indore</h2>
-        <div className="flex gap-6 overflow-x-auto scrollbar-hide px-2 justify-center" style={{ scrollSnapType: "x mandatory" }}>
-          {data.topAreas.map(area => (
-            <Link
-              key={area.name}
-              to={`/properties?area=${encodeURIComponent(area.name)}`}
-              className="min-w-[140px] bg-yellow-50 rounded-xl shadow-lg flex flex-col items-center justify-center py-6 px-4 cursor-pointer transform hover:scale-105 transition snap-center"
-            >
-              <span className="text-4xl mb-2">{area.icon || '📍'}</span>
-              <span className="font-semibold text-blue-900 text-lg">{area.name}</span>
-              {area.count ? <span className="mt-1 text-blue-700 text-sm">{area.count} listings</span> : <span className="mt-1 text-blue-700 underline text-sm">Browse</span>}
-            </Link>
-          ))}
-        </div> */}
         <TopArea areas={data.topAreas} />
       </section>
 
