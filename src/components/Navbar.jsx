@@ -32,7 +32,7 @@ export default function Navbar() {
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isHome]); // [15]
+  }, [isHome]);
 
   // Outside click for account dropdown
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function Navbar() {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []); // [15]
+  }, []);
 
   // Suggestions only when typing and query length > 1
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function Navbar() {
       ctrl.abort();
       clearTimeout(t);
     };
-  }, [deferredQuery, isHome]); // [1][13]
+  }, [deferredQuery, isHome]);
 
   // Live navigate ONLY on Properties page so results update as typing
   useEffect(() => {
@@ -83,84 +83,190 @@ export default function Navbar() {
     if (current !== target) {
       navigate(target, { replace: true });
     }
-  }, [deferredQuery, isSearchFocused, isProperties, location.pathname, location.search, navigate]); // [1][6]
+  }, [deferredQuery, isSearchFocused, isProperties, location.pathname, location.search, navigate]);
 
   const handleSearch = (e) => {
     e.preventDefault();
     const q = searchQuery.trim();
     if (isHome) {
-      // On Home, go to Properties once (no live navigate here)
       navigate(q ? `/properties?search=${encodeURIComponent(q)}` : `/properties`);
       setShowSuggestions(false);
+      setMobileMenu(false);
       return;
     }
-    // On Properties, form submit is redundant (live sync already), but keep it safe
     navigate(q ? `/properties?search=${encodeURIComponent(q)}` : `/properties`);
     setShowSuggestions(false);
-  }; // [6][17]
+    setMobileMenu(false);
+  };
 
   const handleSuggestionClick = (value) => {
     const v = (value || "").trim();
-    // From Home suggestions → go to Properties with the value
     navigate(v ? `/properties?search=${encodeURIComponent(v)}` : `/properties`);
     setSearchQuery(v);
     setShowSuggestions(false);
-  }; // [6]
+    setMobileMenu(false);
+  };
 
   const handleLogout = () => {
     logout();
     setAccountDropdown(false);
+    setMobileMenu(false);
     navigate("/login");
-  }; // [15]
+  };
 
-  const NavLinks = ({ linkClass = "" }) => (
+  // Close mobile menu when route changes
+  useEffect(() => {
+    if (mobileMenu) setMobileMenu(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search]);
+
+  // Lock scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenu) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev || "";
+      };
+    }
+  }, [mobileMenu]);
+
+  // Allow ESC to close mobile menu
+  useEffect(() => {
+    if (!mobileMenu) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setMobileMenu(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [mobileMenu]);
+
+  const NavLinks = ({ linkClass = "", onClick }) => (
     <>
-      <Link to="/" className={linkClass}>Home</Link>
-      <Link to="/properties" className={linkClass}>Properties</Link>
-      <Link to="/about" className={linkClass}>About</Link>
-      {user && <Link to="/wishlist" className={linkClass}>Wishlist</Link>}
+      <Link to="/" className={linkClass} onClick={onClick}>Home</Link>
+      <Link to="/properties" className={linkClass} onClick={onClick}>Properties</Link>
+      <Link to="/about" className={linkClass} onClick={onClick}>About</Link>
+      {user && <Link to="/wishlist" className={linkClass} onClick={onClick}>Wishlist</Link>}
     </>
+  );
+
+  const MobileToggle = ({ btnClass = "" }) => (
+    <button
+      type="button"
+      aria-label="Open menu"
+      className={`md:hidden inline-flex items-center justify-center rounded-md p-2 ${btnClass}`}
+      onClick={() => setMobileMenu(true)}
+    >
+      ☰
+    </button>
   );
 
   // If NOT home → sticky navbar (unchanged design)
   if (!isHome) {
     return (
-      <nav className="sticky top-0 w-full bg-white shadow-md z-50">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-2">
-          <Link to="/" className="flex items-center">
-            <Logo size={44} variant="full" />
-          </Link>
+      <>
+        <nav className="sticky top-0 w-full bg-white shadow-md z-50">
+          <div className="max-w-7xl mx-auto flex items-center justify-between px-4 py-2">
+            <Link to="/" className="flex items-center">
+              <Logo size={44} variant="full" />
+            </Link>
 
-          <form onSubmit={handleSearch} className="hidden md:flex flex-1 justify-center mx-4 relative">
-            <div className="flex items-center border border-blue-200 rounded-full px-3 py-1.5 w-full max-w-lg bg-white">
-              <input
-                ref={inputRef}
-                type="search"
-                placeholder="Search by city or project"
-                className="flex-1 bg-transparent outline-none text-sm text-blue-900 px-2"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-              />
-              <button type="submit" className="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full">🔍</button>
+            {/* Desktop search */}
+            <form onSubmit={handleSearch} className="hidden md:flex flex-1 justify-center mx-4 relative">
+              <div className="flex items-center border border-blue-200 rounded-full px-3 py-1.5 w-full max-w-lg bg-white">
+                <input
+                  ref={inputRef}
+                  type="search"
+                  placeholder="Search by city or project"
+                  className="flex-1 bg-transparent outline-none text-sm text-blue-900 px-2"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
+                />
+                <button type="submit" className="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full">🔍</button>
+              </div>
+              {/* Suggestions not shown on Properties page to keep UI clean */}
+            </form>
+
+            {/* Desktop links */}
+            <div className="hidden md:flex gap-6 items-center font-semibold text-blue-900">
+              <NavLinks />
+              {user ? (
+                <>
+                  <Link to="/postProperty" className="bg-blue-600 text-white px-4 py-1.5 rounded-full">Post Property</Link>
+                  <button onClick={handleLogout} className="hover:text-yellow-500">Logout</button>
+                </>
+              ) : (
+                <Link to="/login" className="hover:text-yellow-500">Login</Link>
+              )}
             </div>
-            {/* Suggestions not shown on Properties page to keep UI clean */}
-          </form>
 
-          <div className="hidden md:flex gap-6 items-center font-semibold text-blue-900">
-            <NavLinks />
-            {user ? (
-              <>
-                <Link to="/postProperty" className="bg-blue-600 text-white px-4 py-1.5 rounded-full">Post Property</Link>
-                <button onClick={handleLogout} className="hover:text-yellow-500">Logout</button>
-              </>
-            ) : (
-              <Link to="/login" className="hover:text-yellow-500">Login</Link>
-            )}
+            {/* Mobile toggle */}
+            <MobileToggle btnClass="text-blue-900 hover:bg-blue-50" />
           </div>
-        </div>
-      </nav>
+        </nav>
+
+        {/* Mobile overlay menu */}
+        {mobileMenu && (
+          <div className="fixed inset-0 z-[60] bg-white">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <Logo size={44} variant="full" />
+              <button
+                aria-label="Close menu"
+                className="p-2 rounded-md text-blue-900 hover:bg-blue-50"
+                onClick={() => setMobileMenu(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 space-y-6">
+              {/* Mobile search (no suggestions on Properties to keep parity) */}
+              <form onSubmit={handleSearch} className="relative">
+                <div className="flex items-center border border-blue-200 rounded-full px-3 py-2 bg-white">
+                  <input
+                    type="search"
+                    placeholder="Search by city or project"
+                    className="flex-1 bg-transparent outline-none text-sm text-blue-900 px-2"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
+                  />
+                  <button type="submit" className="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full">🔍</button>
+                </div>
+              </form>
+
+              <div className="flex flex-col gap-4 font-semibold text-blue-900">
+                <NavLinks linkClass="px-2 py-2 rounded hover:bg-blue-50" onClick={() => setMobileMenu(false)} />
+                {user ? (
+                  <>
+                    <Link
+                      to="/postProperty"
+                      className="text-center bg-blue-600 text-white px-4 py-2 rounded-full"
+                      onClick={() => setMobileMenu(false)}
+                    >
+                      Post Property
+                    </Link>
+                    <button onClick={handleLogout} className="text-left px-2 py-2 rounded hover:bg-blue-50">
+                      Logout
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/login"
+                    className="text-center bg-yellow-400 text-blue-900 px-4 py-2 rounded-full"
+                    onClick={() => setMobileMenu(false)}
+                  >
+                    Login
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -173,6 +279,7 @@ export default function Navbar() {
             <Link to="/" className="flex items-center">
               <Logo size={44} variant="full" />
             </Link>
+
             <div className="hidden md:flex gap-6 font-semibold">
               <NavLinks linkClass="hover:text-yellow-400" />
             </div>
@@ -186,6 +293,9 @@ export default function Navbar() {
                 <Link to="/login" className="hover:text-yellow-400">Login</Link>
               )}
             </div>
+
+            {/* Mobile toggle (white for transparent header) */}
+            <MobileToggle btnClass="text-white hover:bg-white/10" />
           </div>
         </nav>
       )}
@@ -196,6 +306,8 @@ export default function Navbar() {
             <Link to="/" className="flex items-center">
               <Logo size={44} variant="full" />
             </Link>
+
+            {/* Desktop search with suggestions (Home only) */}
             <form onSubmit={handleSearch} className="hidden md:flex flex-1 justify-center mx-4 relative">
               <div className="flex items-center border border-blue-200 rounded-full px-3 py-1.5 w-full max-w-lg bg-white">
                 <input
@@ -225,6 +337,8 @@ export default function Navbar() {
                 </ul>
               )}
             </form>
+
+            {/* Desktop links */}
             <div className="hidden md:flex gap-6 items-center font-semibold text-blue-900">
               <NavLinks />
               {user ? (
@@ -236,8 +350,85 @@ export default function Navbar() {
                 <Link to="/login" className="hover:text-yellow-500">Login</Link>
               )}
             </div>
+
+            {/* Mobile toggle */}
+            <MobileToggle btnClass="text-blue-900 hover:bg-blue-50" />
           </div>
         </nav>
+      )}
+
+      {/* Mobile overlay menu (Home, both transparent and sticky) */}
+      {mobileMenu && (
+        <div className="fixed inset-0 z-[60] bg-white">
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <Logo size={44} variant="full" />
+            <button
+              aria-label="Close menu"
+              className="p-2 rounded-md text-blue-900 hover:bg-blue-50"
+              onClick={() => setMobileMenu(false)}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-4 space-y-6">
+            {/* Mobile search with suggestions on Home */}
+            <form onSubmit={handleSearch} className="relative">
+              <div className="flex items-center border border-blue-200 rounded-full px-3 py-2 bg-white">
+                <input
+                  type="search"
+                  placeholder="Search by city or project"
+                  className="flex-1 bg-transparent outline-none text-sm text-blue-900 px-2"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onFocus={() => { setIsSearchFocused(true); if (searchQuery) setShowSuggestions(true); }}
+                  onBlur={() => setIsSearchFocused(false)}
+                />
+                <button type="submit" className="bg-yellow-400 text-blue-900 px-3 py-1 rounded-full">🔍</button>
+              </div>
+
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-md z-50">
+                  {suggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      onClick={() => handleSuggestionClick(s.label)}
+                      className="px-4 py-2 hover:bg-blue-50 cursor-pointer text-sm text-blue-900"
+                    >
+                      {s.label} <span className="text-gray-400 text-xs">({s.type})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </form>
+
+            <div className="flex flex-col gap-4 font-semibold text-blue-900">
+              <NavLinks linkClass="px-2 py-2 rounded hover:bg-blue-50" onClick={() => setMobileMenu(false)} />
+              {user ? (
+                <>
+                  <Link
+                    to="/postProperty"
+                    className="text-center bg-blue-600 text-white px-4 py-2 rounded-full"
+                    onClick={() => setMobileMenu(false)}
+                  >
+                    Post Property
+                  </Link>
+                  <button onClick={handleLogout} className="text-left px-2 py-2 rounded hover:bg-blue-50">
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <Link
+                  to="/login"
+                  className="text-center bg-yellow-400 text-blue-900 px-4 py-2 rounded-full"
+                  onClick={() => setMobileMenu(false)}
+                >
+                  Login
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
