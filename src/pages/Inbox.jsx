@@ -389,21 +389,14 @@ export default function Inbox() {
 
             {/* Composer */}
             <div
-              className="border-t bg-white/80 backdrop-blur px-3 py-3 sticky bottom-0"
+              className="border-t bg-white/80 backdrop-blur px-0.8 py-3 sticky bottom-0"
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
             >
               <div className="flex items-center gap-2">
-                <button
-                  className="shrink-0 w-9 h-9 grid place-items-center rounded-lg border border-gray-200 hover:bg-gray-50"
-                  title="Attach"
-                  type="button"
-                >
-                  +
-                </button>
                 <input
                   type="text"
                   placeholder="Type a message…"
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition"
+                  className="flex-1 border border-gray-200 rounded-xl px-1 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={onKeyDown}
