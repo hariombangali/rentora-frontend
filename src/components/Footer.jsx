@@ -48,11 +48,11 @@ export default function Footer() {
   return (
     <footer
       aria-label="Footer"
-      className="mt-16 w-full bg-gradient-to-tr from-blue-800 to-blue-600 text-white pt-12 pb-8 px-6 sm:px-12"
+      className="mt-16 w-full bg-gradient-to-tr from-blue-800 to-blue-600 text-white pt-12 pb-8 px-6 sm:px-8"
     >
       <div className="max-w-7xl mx-auto">
         {/* Top grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-10">
           {/* Brand + contact */}
           <div>
             <div className="flex items-center gap-2">
@@ -62,24 +62,29 @@ export default function Footer() {
               </span>
             </div>
             <p className="mt-3 text-blue-100">
-              Verified rooms, PGs, and flats across Indore—find and move with confidence [2].  
+              Verified rooms, PGs, and flats across Indore—find and move with confidence.
             </p>
+
             <div className="mt-4 space-y-1 text-sm text-blue-100/90">
               <p>Indore, Madhya Pradesh</p>
               <p>
                 Email:{" "}
-                <a href="mailto:info@room4rentindore.com" className="underline decoration-yellow-300 hover:text-yellow-300">
+                <a
+                  href="mailto:info@room4rentindore.com"
+                  className="underline decoration-yellow-300 hover:text-yellow-300"
+                >
                   info@room4rentindore.com
                 </a>
               </p>
             </div>
+
             <div className="mt-4 flex gap-3" aria-label="Social links">
               {socialLinks.map(({ href, label, Icon }) => (
                 <a
                   key={label}
                   href={href}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  target={href.startsWith("mailto:") ? undefined : "_blank"}
+                  rel={href.startsWith("mailto:") ? undefined : "noopener noreferrer"}
                   aria-label={label}
                   className="p-2 rounded-full bg-white/10 hover:bg-yellow-300 hover:text-blue-900 transition"
                 >
@@ -94,7 +99,9 @@ export default function Footer() {
               onSubmit={(e) => e.preventDefault()}
               aria-label="Newsletter signup"
             >
-              <label htmlFor="email-sub" className="sr-only">Subscribe for updates</label>
+              <label htmlFor="email-sub" className="sr-only">
+                Subscribe for updates
+              </label>
               <div className="flex rounded-lg overflow-hidden border border-white/20 bg-white/10 backdrop-blur-sm">
                 <input
                   id="email-sub"
@@ -110,56 +117,154 @@ export default function Footer() {
                   Subscribe
                 </button>
               </div>
-              <p className="mt-1 text-xs text-blue-100/80">No spam, unsubscribe anytime [3].</p>
+              <p className="mt-1 text-xs text-blue-100/80">
+                No spam, unsubscribe anytime.
+              </p>
             </form>
           </div>
 
           {/* Explore */}
           <nav aria-label="Explore" className="text-sm">
-            <h3 className="font-semibold text-yellow-200">Explore</h3>
-            <ul role="list" className="mt-3 space-y-2">
-              <li><Link to="/properties" className="hover:underline">Browse Listings</Link></li>
-              {propertyTypes.map((t) => (
-                <li key={t.value}>
-                  <Link to={`/properties?occupancyType=${t.value}`} className="hover:underline">
-                    {t.label}
+            {/* Mobile accordion */}
+            <details className="md:hidden group">
+              <summary className="flex items-center justify-between cursor-pointer select-none py-2">
+                <span className="font-semibold text-yellow-200">Explore</span>
+                <span className="transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <ul role="list" className="mt-2 space-y-2 pl-1">
+                <li>
+                  <Link to="/properties" className="hover:underline">
+                    Browse Listings
                   </Link>
                 </li>
-              ))}
-              <li><Link to="/owner/list-property" className="hover:underline">List Your Property</Link></li>
-            </ul>
+                {propertyTypes.map((t) => (
+                  <li key={t.value}>
+                    <Link
+                      to={`/properties?occupancyType=${t.value}`}
+                      className="hover:underline"
+                    >
+                      {t.label}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link to="/owner/list-property" className="hover:underline">
+                    List Your Property
+                  </Link>
+                </li>
+              </ul>
+            </details>
+            {/* Desktop list */}
+            <div className="hidden md:block">
+              <h3 className="font-semibold text-yellow-200">Explore</h3>
+              <ul role="list" className="mt-3 space-y-2">
+                <li>
+                  <Link to="/properties" className="hover:underline">
+                    Browse Listings
+                  </Link>
+                </li>
+                {propertyTypes.map((t) => (
+                  <li key={t.value}>
+                    <Link
+                      to={`/properties?occupancyType=${t.value}`}
+                      className="hover:underline"
+                    >
+                      {t.label}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link to="/owner/list-property" className="hover:underline">
+                    List Your Property
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </nav>
 
           {/* Popular Areas */}
           <nav aria-label="Popular Areas" className="text-sm">
-            <h3 className="font-semibold text-yellow-2 00">Popular Areas</h3>
-            <ul role="list" className="mt-3 space-y-2">
-              {popularAreas.map((name) => (
-                <li key={name}>
-                  <Link to={`/properties?area=${encodeURIComponent(name)}`} className="hover:underline">
-                    {name}
+            {/* Mobile accordion */}
+            <details className="md:hidden group">
+              <summary className="flex items-center justify-between cursor-pointer select-none py-2">
+                <span className="font-semibold text-yellow-200">Popular Areas</span>
+                <span className="transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <ul role="list" className="mt-2 space-y-2 pl-1">
+                {popularAreas.map((name) => (
+                  <li key={name}>
+                    <Link
+                      to={`/properties?area=${encodeURIComponent(name)}`}
+                      className="hover:underline"
+                    >
+                      {name}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link to="/areas" className="hover:underline">
+                    See All Areas
                   </Link>
                 </li>
-              ))}
-              <li><Link to="/areas" className="hover:underline">See All Areas</Link></li>
-            </ul>
+              </ul>
+            </details>
+            {/* Desktop list */}
+            <div className="hidden md:block">
+              <h3 className="font-semibold text-yellow-200">Popular Areas</h3>
+              <ul role="list" className="mt-3 space-y-2">
+                {popularAreas.map((name) => (
+                  <li key={name}>
+                    <Link
+                      to={`/properties?area=${encodeURIComponent(name)}`}
+                      className="hover:underline"
+                    >
+                      {name}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link to="/areas" className="hover:underline">
+                    See All Areas
+                  </Link>
+                </li>
+              </ul>
+            </div>
           </nav>
 
           {/* Support & Legal */}
           <nav aria-label="Support and Legal" className="text-sm">
-            <h3 className="font-semibold text-yellow-200">Support & Legal</h3>
-            <ul role="list" className="mt-3 space-y-2">
-              <li><Link to="/about" className="hover:underline">About</Link></li>
-              <li><Link to="/contact" className="hover:underline">Contact Us</Link></li>
-              <li><Link to="/help" className="hover:underline">Help Center</Link></li>
-              <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
-              <li><Link to="/privacy" className="hover:underline">Privacy Policy</Link></li>
-            </ul>
-
-            {/* App badges */}
-            <div className="mt-4 flex gap-2">
-              <a aria-label="App Store" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold"> App Store</a>
-              <a aria-label="Google Play" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold">▶ Google Play</a>
+            {/* Mobile accordion */}
+            <details className="md:hidden group">
+              <summary className="flex items-center justify-between cursor-pointer select-none py-2">
+                <span className="font-semibold text-yellow-200">Support &amp; Legal</span>
+                <span className="transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <ul role="list" className="mt-2 space-y-2 pl-1">
+                <li><Link to="/about" className="hover:underline">About</Link></li>
+                <li><Link to="/contact" className="hover:underline">Contact Us</Link></li>
+                <li><Link to="/help" className="hover:underline">Help Center</Link></li>
+                <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
+                <li><Link to="/privacy" className="hover:underline">Privacy Policy</Link></li>
+              </ul>
+              <div className="mt-3 flex gap-2">
+                <a aria-label="App Store" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold"> App Store</a>
+                <a aria-label="Google Play" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold">▶ Google Play</a>
+              </div>
+            </details>
+            {/* Desktop list */}
+            <div className="hidden md:block">
+              <h3 className="font-semibold text-yellow-200">Support &amp; Legal</h3>
+              <ul role="list" className="mt-3 space-y-2">
+                <li><Link to="/about" className="hover:underline">About</Link></li>
+                <li><Link to="/contact" className="hover:underline">Contact Us</Link></li>
+                <li><Link to="/help" className="hover:underline">Help Center</Link></li>
+                <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
+                <li><Link to="/privacy" className="hover:underline">Privacy Policy</Link></li>
+              </ul>
+              <div className="mt-4 flex gap-2">
+                <a aria-label="App Store" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold"> App Store</a>
+                <a aria-label="Google Play" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold">▶ Google Play</a>
+              </div>
             </div>
           </nav>
         </div>
