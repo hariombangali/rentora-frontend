@@ -122,7 +122,7 @@ export default function Home() {
   };
 
 
-  if (loading) return <FullPageLoader message="Loading Dashboard..." />;
+  if (loading) return <FullPageLoader message="Loading..." />;
   if (error) return <div className="p-6 text-center text-red-600">{error}</div>;
 
   return (
