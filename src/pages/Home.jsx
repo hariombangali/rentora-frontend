@@ -6,7 +6,7 @@ import PropertiesMap from '../components/PropertiesMap.jsx';
 import TopArea from '../components/TopArea.jsx';
 import FullPageLoader from "../components/FullPageLoader";
 
-const CACHE_KEY = "home_data_v1";
+const CACHE_KEY = 'home_data_v1';
 const CACHE_TTL = 60 * 60 * 1000;
 
 export default function Home() {
@@ -29,7 +29,7 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || “null”);
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
       if (cached && Date.now() - cached.ts < CACHE_TTL) {
         setData(cached.data);
         setLoading(false);
