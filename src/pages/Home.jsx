@@ -6,6 +6,9 @@ import PropertiesMap from '../components/PropertiesMap.jsx';
 import TopArea from '../components/TopArea.jsx';
 import FullPageLoader from "../components/FullPageLoader";
 
+const CACHE_KEY = "home_data_v1";
+const CACHE_TTL = 60 * 60 * 1000;
+
 export default function Home() {
 
   const navigate = useNavigate();
@@ -24,18 +27,14 @@ export default function Home() {
   const [searchLocation, setSearchLocation] = useState('');
   const [searchType, setSearchType] = useState('');
 
-  const CACHE_KEY = “home_data_v1”;
-  const CACHE_TTL = 60 * 60 * 1000; // 1 hour
-
   useEffect(() => {
-    // Serve from cache immediately if fresh
     try {
       const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || “null”);
       if (cached && Date.now() - cached.ts < CACHE_TTL) {
         setData(cached.data);
         setLoading(false);
       }
-    } catch {}
+    } catch (e) { /* ignore stale/corrupt cache */ }
     fetchAll();
   }, []);
 
@@ -107,7 +106,7 @@ export default function Home() {
       }
 
       setData(next);
-      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: next })); } catch {}
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: next })); } catch (e) { /* quota exceeded */ }
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load home page data");
     } finally {
