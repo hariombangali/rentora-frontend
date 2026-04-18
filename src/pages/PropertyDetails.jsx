@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import { BedDouble, Bath, Armchair, CalendarDays, Phone, Mail, Heart } from 'lucide-react';
 import { useAuth } from "../context/AuthContext";
 import FullPageLoader from "../components/FullPageLoader";
+import { toast } from "../utils/toast";
 
 // Helper function to format the date
 const formatDate = (dateString) => {
@@ -138,7 +139,7 @@ export default function PropertyDetails() {
       return false;
     }
     if (user && property?.user && user._id === property.user._id) {
-      alert("Cannot perform this action on your own listing");
+      toast.error("Cannot perform this action on your own listing");
       return false;
     }
     return true;
@@ -170,7 +171,7 @@ export default function PropertyDetails() {
       setLeadNote("");
       navigate("/inbox", { state: { conversation: res.data } });
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to submit enquiry");
+      toast.error(e.response?.data?.message || "Failed to submit enquiry");
     } finally {
       setSubmittingLead(false);
     }
@@ -191,10 +192,10 @@ export default function PropertyDetails() {
         setPhoneMasked(full);
         setCanRevealPhone(true);
       } else {
-        alert(res.data?.message || "Upgrade required to reveal more contacts");
+        toast.error(res.data?.message || "Upgrade required to reveal more contacts");
       }
     } catch (e) {
-      alert(e.response?.data?.message || "Could not reveal phone");
+      toast.error(e.response?.data?.message || "Could not reveal phone");
     } finally {
       setRevealing(false);
     }
@@ -253,9 +254,9 @@ export default function PropertyDetails() {
       setLeadNote("");
       setVisitDate("");
       setVisitSlot("");
-      alert("Visit requested! Owner will confirm or reschedule.");
+      toast.success("Visit requested! Owner will confirm or reschedule.");
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to schedule visit");
+      toast.error(e.response?.data?.message || "Failed to schedule visit");
     } finally {
       setSubmittingVisit(false);
     }

@@ -147,7 +147,7 @@ export default function MyProperties() {
 
   // Toggle Active
   const handleToggle = async (id, active) => {
-    const prev = properties;
+    const prev = [...properties];
     // Optimistic UI
     setProperties((prevList) => prevList.map((p) => (p._id === id ? { ...p, active: !active } : p)));
 

@@ -1,10 +1,21 @@
-// src/pages/OwnerBookings.jsx
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "../utils/toast";
+import ConfirmModal from "../components/ConfirmModal";
+import { SkeletonGrid } from "../components/SkeletonCard";
 
-const formatDate = (d) => (d ? new Date(d).toLocaleDateString() : "N/A");
+const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN") : "N/A");
+
+const STATUS_COLORS = {
+  pending: "bg-yellow-100 text-yellow-800",
+  approved: "bg-green-100 text-green-800",
+  rejected: "bg-red-100 text-red-800",
+  cancelled: "bg-gray-100 text-gray-600",
+  rescheduled: "bg-blue-100 text-blue-800",
+  completed: "bg-purple-100 text-purple-800",
+};
 
 export default function OwnerBookings() {
   const { user } = useAuth();
@@ -13,7 +24,13 @@ export default function OwnerBookings() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Reschedule modal state (for visit)
+  // Confirm modal state
+  const [confirmState, setConfirmState] = useState(null); // { action, id, label, message }
+  const [rejectReason, setRejectReason] = useState("");
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState(null);
+
+  // Reschedule modal state
   const [showReschedule, setShowReschedule] = useState(false);
   const [currentVisitId, setCurrentVisitId] = useState(null);
   const [resDate, setResDate] = useState("");
@@ -27,54 +44,48 @@ export default function OwnerBookings() {
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
   useEffect(() => {
-    const fetch = async () => {
-      try {
-        const res = await API.get("/bookings/owner", authHeader);
-        setBookings(res.data || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
+    API.get("/bookings/owner", authHeader)
+      .then((res) => setBookings(res.data || []))
+      .catch(() => toast.error("Failed to load booking requests"))
+      .finally(() => setLoading(false));
   }, []);
 
-  const refreshOne = (updated) => {
-    setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
-  };
+  const refreshOne = (updated) => setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
 
   const approve = async (id) => {
-    if (!confirm("Approve this request?")) return;
     try {
       const res = await API.patch(`/bookings/${id}/approve`, {}, authHeader);
       refreshOne(res.data);
+      toast.success("Booking approved");
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to approve");
+      toast.error(e.response?.data?.message || "Failed to approve");
     }
   };
 
-  const reject = async (id) => {
-    const reason = prompt("Reason for rejection (optional)") || "";
+  const openReject = (id) => { setRejectTargetId(id); setRejectReason(""); setShowRejectModal(true); };
+
+  const submitReject = async () => {
+    setShowRejectModal(false);
     try {
-      const res = await API.patch(`/bookings/${id}/reject`, { reason }, authHeader);
+      const res = await API.patch(`/bookings/${rejectTargetId}/reject`, { reason: rejectReason }, authHeader);
       refreshOne(res.data);
+      toast.success("Booking rejected");
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to reject");
+      toast.error(e.response?.data?.message || "Failed to reject");
     }
   };
 
   const cancel = async (id) => {
-    if (!confirm("Cancel this request?")) return;
+    setConfirmState(null);
     try {
       const res = await API.patch(`/bookings/${id}/cancel`, {}, authHeader);
       refreshOne(res.data);
+      toast.success("Booking cancelled");
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to cancel");
+      toast.error(e.response?.data?.message || "Failed to cancel");
     }
   };
 
-  // Open chat with seeker for this property
   const messageSeeker = async (b) => {
     try {
       const res = await API.get("/messages/conversations", {
@@ -82,34 +93,25 @@ export default function OwnerBookings() {
         ...authHeader,
       });
       navigate("/inbox", { state: { conversation: res.data } });
-    } catch (e) {
-      alert("Could not open chat");
+    } catch {
+      toast.error("Could not open chat");
     }
   };
 
-  // Reschedule flow (visit only)
   const openReschedule = (b) => {
     setCurrentVisitId(b._id);
-    setResDate("");
-    setResSlot("");
-    setResReason("");
-    setSlots([]);
+    setResDate(""); setResSlot(""); setResReason(""); setSlots([]);
     setShowReschedule(true);
   };
 
   const loadSlots = async (dateStr, propertyId) => {
     if (!dateStr) return;
+    setLoadingSlots(true);
     try {
-      setLoadingSlots(true);
-      const res = await API.get("/visits/availability", {
-        params: { propertyId, date: dateStr },
-      });
+      const res = await API.get("/visits/availability", { params: { propertyId, date: dateStr } });
       setSlots(res.data?.slots || []);
-    } catch {
-      setSlots([]);
-    } finally {
-      setLoadingSlots(false);
-    }
+    } catch { setSlots([]); }
+    finally { setLoadingSlots(false); }
   };
 
   useEffect(() => {
@@ -120,110 +122,106 @@ export default function OwnerBookings() {
 
   const submitReschedule = async () => {
     if (!currentVisitId || !resDate || !resSlot) return;
+    setRescheduling(true);
     try {
-      setRescheduling(true);
-      const res = await API.patch(
-        `/bookings/${currentVisitId}/reschedule`,
-        { date: resDate, slot: resSlot, reason: resReason },
-        authHeader
-      );
+      const res = await API.patch(`/bookings/${currentVisitId}/reschedule`, { date: resDate, slot: resSlot, reason: resReason }, authHeader);
       refreshOne(res.data);
       setShowReschedule(false);
+      toast.success("Visit rescheduled");
     } catch (e) {
-      alert(e.response?.data?.message || "Failed to reschedule");
-    } finally {
-      setRescheduling(false);
-    }
+      toast.error(e.response?.data?.message || "Failed to reschedule");
+    } finally { setRescheduling(false); }
   };
 
-  const TypeBadge = ({ type }) => (
-    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 border">{type}</span>
-  );
-
-  const StatusBadge = ({ status }) => (
-    <span className="px-2 py-0.5 rounded text-xs border capitalize">
-      {status}
-    </span>
-  );
+  if (loading) return <div className="max-w-4xl mx-auto p-4"><SkeletonGrid count={3} /></div>;
 
   return (
     <div className="max-w-4xl mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-4">Booking Requests</h2>
+      <h2 className="text-2xl font-bold mb-6 text-gray-900">Booking Requests</h2>
 
-      {loading ? (
-        <div>Loading...</div>
-      ) : bookings.length === 0 ? (
-        <div>No booking requests</div>
+      {/* Approve confirm */}
+      <ConfirmModal
+        isOpen={confirmState?.action === "approve"}
+        title="Approve Booking"
+        message="Approve this request? The seeker will be notified by email."
+        confirmLabel="Approve"
+        confirmClass="bg-green-600 hover:bg-green-700"
+        onConfirm={() => { approve(confirmState.id); setConfirmState(null); }}
+        onCancel={() => setConfirmState(null)}
+      />
+
+      {/* Cancel confirm */}
+      <ConfirmModal
+        isOpen={confirmState?.action === "cancel"}
+        title="Cancel Booking"
+        message="Cancel this booking request?"
+        confirmLabel="Yes, Cancel"
+        onConfirm={() => cancel(confirmState.id)}
+        onCancel={() => setConfirmState(null)}
+      />
+
+      {/* Reject modal with reason */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowRejectModal(false)}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Reject Booking</h3>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-200 resize-none"
+              rows={3}
+              placeholder="Let the seeker know why…"
+            />
+            <div className="mt-4 flex gap-3 justify-end">
+              <button onClick={() => setShowRejectModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+              <button onClick={submitReject} className="rounded-xl px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700">Reject</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {bookings.length === 0 ? (
+        <div className="text-center py-16 text-gray-500">
+          <p className="text-lg font-medium">No booking requests yet</p>
+          <p className="text-sm mt-1">When tenants request your property, they'll appear here.</p>
+        </div>
       ) : (
         bookings.map((b) => (
-          <div key={b._id} className="border p-4 rounded mb-3 bg-white">
-            <div className="flex justify-between">
+          <div key={b._id} className="border border-gray-200 rounded-2xl p-5 mb-4 bg-white shadow-sm">
+            <div className="flex justify-between flex-wrap gap-2">
               <div>
-                <h3 className="font-semibold">
-                  {b.property?.title} <span className="ml-2"><TypeBadge type={b.type} /></span>
+                <h3 className="font-semibold text-gray-900">
+                  {b.property?.title}
+                  <span className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[b.status] || "bg-gray-100"}`}>{b.status}</span>
+                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{b.type}</span>
                 </h3>
-                <div className="text-sm text-gray-500">
-                  {b.user?.name} • {b.user?.email}
-                </div>
-
-                {/* Details by type */}
-                <div className="mt-2 text-sm">
-                  {b.type === "visit" && (
-                    <>
-                      <div>Visit date: {formatDate(b.visitDate)}</div>
-                      <div>Time slot: {b.visitSlot || "-"}</div>
-                    </>
-                  )}
-                  {b.type === "rental" && (
-                    <>
-                      <div>Check-in: {formatDate(b.checkIn)}</div>
-                      {b.checkOut && <div>Check-out: {formatDate(b.checkOut)}</div>}
-                    </>
-                  )}
-                  {b.type === "lead" && (
-                    <div>Enquiry received</div>
-                  )}
+                <div className="text-sm text-gray-500 mt-0.5">{b.user?.name} • {b.user?.email}</div>
+                <div className="mt-2 text-sm text-gray-600 space-y-0.5">
+                  {b.type === "visit" && <><div>Visit: {formatDate(b.visitDate)} — {b.visitSlot || "-"}</div></>}
+                  {b.type === "rental" && <><div>Check-in: {formatDate(b.checkIn)}</div>{b.checkOut && <div>Check-out: {formatDate(b.checkOut)}</div>}</>}
+                  {b.type === "lead" && <div>Enquiry</div>}
                 </div>
               </div>
-
-              <div className="text-right">
-                <div className="font-semibold"><StatusBadge status={b.status} /></div>
-                <div className="text-xs text-gray-400">{new Date(b.createdAt).toLocaleString()}</div>
-              </div>
+              <div className="text-xs text-gray-400 text-right">{new Date(b.createdAt).toLocaleString("en-IN")}</div>
             </div>
 
-            {b.message && <div className="mt-3 text-sm text-gray-700 whitespace-pre-wrap">{b.message}</div>}
+            {b.message && <div className="mt-3 text-sm text-gray-600 bg-gray-50 rounded-xl p-3 whitespace-pre-wrap">{b.message}</div>}
 
-            <div className="mt-3 flex gap-2 flex-wrap">
-              {/* Primary actions by type and status */}
+            <div className="mt-4 flex gap-2 flex-wrap">
               {b.status === "pending" && (
                 <>
-                  <button onClick={() => approve(b._id)} className="px-3 py-1 bg-green-600 text-white rounded">
-                    Approve
-                  </button>
-                  <button onClick={() => reject(b._id)} className="px-3 py-1 bg-red-500 text-white rounded">
-                    Reject
-                  </button>
+                  <button onClick={() => setConfirmState({ action: "approve", id: b._id })} className="px-4 py-1.5 rounded-xl bg-green-50 text-green-700 border border-green-200 text-sm font-medium hover:bg-green-100">Approve</button>
+                  <button onClick={() => openReject(b._id)} className="px-4 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-medium hover:bg-red-100">Reject</button>
                 </>
               )}
-
-              {/* Visit-specific owner tools */}
-              {b.type === "visit" && b.status !== "cancelled" && (
-                <button onClick={() => openReschedule(b)} className="px-3 py-1 border rounded">
-                  Reschedule
-                </button>
+              {b.type === "visit" && !["cancelled", "completed"].includes(b.status) && (
+                <button onClick={() => openReschedule(b)} className="px-4 py-1.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">Reschedule</button>
               )}
-
-              {/* Cancel option */}
-              {b.status !== "cancelled" && (
-                <button onClick={() => cancel(b._id)} className="px-3 py-1 border rounded">
-                  Cancel
-                </button>
+              {!["cancelled", "completed"].includes(b.status) && (
+                <button onClick={() => setConfirmState({ action: "cancel", id: b._id })} className="px-4 py-1.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">Cancel</button>
               )}
-
-              <button onClick={() => messageSeeker(b)} className="px-3 py-1 bg-blue-500 text-white rounded">
-                Message
-              </button>
+              <button onClick={() => messageSeeker(b)} className="px-4 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-sm font-medium hover:bg-blue-100">Message</button>
             </div>
           </div>
         ))
@@ -231,61 +229,44 @@ export default function OwnerBookings() {
 
       {/* Reschedule Modal */}
       {showReschedule && (
-        <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center">
-          <div className="bg-white w-full max-w-md rounded-2xl p-5">
-            <h3 className="text-lg font-semibold mb-3">Reschedule Visit</h3>
+        <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center px-4" onClick={() => setShowReschedule(false)}>
+          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">Reschedule Visit</h3>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">New date</label>
-              <input
-                type="date"
-                value={resDate}
-                onChange={(e) => setResDate(e.target.value)}
-                className="w-full border rounded p-2"
-              />
+            <label className="block text-sm font-medium mb-1">New date</label>
+            <input
+              type="date"
+              value={resDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={(e) => setResDate(e.target.value)}
+              className="w-full border rounded-xl p-2 mb-4"
+            />
+
+            <label className="block text-sm font-medium mb-1">Available time slots</label>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {loadingSlots ? (
+                <span className="text-sm text-gray-500">Loading…</span>
+              ) : slots.length ? (
+                slots.map((s) => (
+                  <button key={s.id || s.time} disabled={s.full} onClick={() => setResSlot(s.time)}
+                    className={`px-3 py-1 rounded-xl border text-sm ${resSlot === s.time ? "bg-blue-600 text-white border-blue-600" : "bg-white"} ${s.full ? "opacity-40 cursor-not-allowed" : ""}`}>
+                    {s.time}
+                  </button>
+                ))
+              ) : (
+                <span className="text-sm text-gray-500">Select a date above</span>
+              )}
             </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Available time slots</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {loadingSlots ? (
-                  <span className="text-sm text-gray-500">Loading slots…</span>
-                ) : slots.length ? (
-                  slots.map((s) => (
-                    <button
-                      key={s.id || s.time}
-                      disabled={s.full}
-                      onClick={() => setResSlot(s.time)}
-                      className={`px-3 py-1 rounded border ${resSlot === s.time ? "bg-blue-600 text-white" : "bg-white"} ${s.full ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      {s.time}
-                    </button>
-                  ))
-                ) : (
-                  <span className="text-sm text-gray-500">Select a date to view slots</span>
-                )}
-              </div>
-            </div>
+            <label className="block text-sm font-medium mb-1">Reason (optional)</label>
+            <input type="text" value={resReason} onChange={(e) => setResReason(e.target.value)}
+              className="w-full border rounded-xl p-2 mb-4" placeholder="Reason for reschedule" />
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Reason (optional)</label>
-              <input
-                type="text"
-                value={resReason}
-                onChange={(e) => setResReason(e.target.value)}
-                className="w-full border rounded p-2"
-                placeholder="Reason for reschedule"
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setShowReschedule(false)} className="px-4 py-2 rounded bg-gray-200">Close</button>
-              <button
-                onClick={submitReschedule}
-                disabled={rescheduling || !resDate || !resSlot}
-                className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-50"
-              >
-                {rescheduling ? "Rescheduling…" : "Confirm"}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowReschedule(false)} className="px-4 py-2 rounded-xl border border-gray-200 text-sm">Close</button>
+              <button onClick={submitReschedule} disabled={rescheduling || !resDate || !resSlot}
+                className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50">
+                {rescheduling ? "Saving…" : "Confirm"}
               </button>
             </div>
           </div>

@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "sonner";
 import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -18,6 +19,7 @@ import PendingApproval from "./pages/Admin/PendingApproval";
 import AllProperties from "./pages/Admin/AllProperties";
 import Users from "./pages/Admin/Users";
 import OwnerVerification from "./pages/Admin/OwnerVerification";
+import Analytics from "./pages/Admin/Analytics";
 import ProfilePage from "./pages/Profile";
 import Inbox from "./pages/Inbox";
 import MyBookings from "./pages/MyBookings";
@@ -31,6 +33,7 @@ function App() {
   if (user && user.role === "admin") {
     return (
       <BrowserRouter>
+        <Toaster richColors position="top-right" />
         <Routes>
           <Route
             path="/admin/*"
@@ -43,6 +46,7 @@ function App() {
             <Route path="all-properties" element={<AllProperties />} />
             <Route path="users" element={<Users />} />
             <Route path="OwnerVerification" element={<OwnerVerification />} />
+            <Route path="analytics" element={<Analytics />} />
             {/* You can add more admin-only nested pages here */}
             {/* Non-matched /admin/* will fallback to dashboard */}
             <Route path="*" element={<Navigate to="/admin" replace />} />
@@ -57,6 +61,7 @@ function App() {
   // PUBLIC / USER / OWNER AREA: show full site layout
   return (
     <BrowserRouter>
+      <Toaster richColors position="top-right" />
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <main className="flex-grow">

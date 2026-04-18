@@ -71,7 +71,9 @@ export default function Properties() {
 
         const [propsRes, wishRes] = await Promise.all([propsPromise, wishPromise]);
 
-        setProperties(Array.isArray(propsRes.data) ? propsRes.data : []);
+        const propsData = propsRes.data;
+        const propsList = Array.isArray(propsData) ? propsData : (propsData?.properties ?? []);
+        setProperties(propsList);
         setWishlistIds(Array.isArray(wishRes.data) ? wishRes.data.map((p) => p._id) : []);
       } catch (error) {
         if (!(error && (error.name === "CanceledError" || error.name === "AbortError"))) {
@@ -86,19 +88,8 @@ export default function Properties() {
     return () => controller.abort();
   }, [searchQuery, qpArea, qpOccupancy, qpMin, qpMax]);
 
-  // Client-side refine
-  const filtered = properties.filter((p) => {
-    const areaMatch =
-      area === "" ||
-      p.city?.toLowerCase().includes(area.toLowerCase()) ||
-      p.locality?.toLowerCase().includes(area.toLowerCase());
-
-    const typeMatch = type === "" || p.occupancyType === type;
-    const minRentMatch = minRent === "" || p.price >= Number(minRent);
-    const maxRentMatch = maxRent === "" || p.price <= Number(maxRent);
-
-    return areaMatch && typeMatch && minRentMatch && maxRentMatch;
-  });
+  // Server already filters — use properties directly
+  const filtered = properties;
 
   // Helpers for URL syncing
   const activeFiltersCount = useMemo(() => {

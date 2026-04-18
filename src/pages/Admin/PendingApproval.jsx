@@ -1,348 +1,213 @@
 import { useEffect, useState } from "react";
 import API from "../../services/api";
+import { toast } from "../../utils/toast";
+import ConfirmModal from "../../components/ConfirmModal";
+import Pagination from "../../components/Pagination";
 
 export default function PendingApproval() {
   const [pending, setPending] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [processingIds, setProcessingIds] = useState(new Set());
-  const [selectedProperty, setSelectedProperty] = useState(null); // For detail modal
+  const [selectedProperty, setSelectedProperty] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectReason, setShowRejectReason] = useState(false);
+  const [confirmApprove, setConfirmApprove] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
-  useEffect(() => {
-    fetchPendingProperties();
-  }, []);
+  const token = localStorage.getItem("token");
+  const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-  const fetchPendingProperties = async () => {
+  const fetchPending = async (p = 1) => {
     setLoading(true);
-    setError("");
     try {
-      const token = localStorage.getItem("token");
-      const res = await API.get("/admin/pending-properties", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setPending(res.data);
+      const res = await API.get(`/admin/pending-properties?page=${p}&limit=10`, authHeader);
+      const data = res.data;
+      if (Array.isArray(data)) {
+        setPending(data);
+      } else {
+        setPending(data.properties || []);
+        setTotalPages(data.pages || 1);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to load pending properties");
+      toast.error(err.response?.data?.message || "Failed to load pending properties");
     } finally {
       setLoading(false);
     }
   };
 
-  const updateProcessing = (id, processing) => {
+  useEffect(() => { fetchPending(page); }, [page]);
+
+  const setProcessing = (id, state) =>
     setProcessingIds((prev) => {
-      const newSet = new Set(prev);
-      if (processing) newSet.add(id);
-      else newSet.delete(id);
-      return newSet;
+      const s = new Set(prev);
+      state ? s.add(id) : s.delete(id);
+      return s;
     });
-  };
 
   const approveProperty = async (propertyId) => {
-    updateProcessing(propertyId, true);
-    setError("");
+    setProcessing(propertyId, true);
     try {
-      const token = localStorage.getItem("token");
-      await API.put(`/admin/approve-property/${propertyId}`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await API.put(`/admin/approve-property/${propertyId}`, {}, authHeader);
       setPending((prev) => prev.filter((p) => p._id !== propertyId));
       closeModal();
+      toast.success("Property approved");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to approve property");
+      toast.error(err.response?.data?.message || "Failed to approve property");
     } finally {
-      updateProcessing(propertyId, false);
+      setProcessing(propertyId, false);
     }
   };
 
   const rejectProperty = async () => {
-    if (!rejectReason.trim()) {
-      alert("Please enter a reason for rejection.");
-      return;
-    }
+    if (!rejectReason.trim()) { toast.error("Please enter a reason for rejection."); return; }
     if (!selectedProperty) return;
-
-    updateProcessing(selectedProperty._id, true);
-    setError("");
+    setProcessing(selectedProperty._id, true);
     try {
-      const token = localStorage.getItem("token");
-      // Assuming your backend supports reject reason in request body
       await API.post(
         `/admin/reject-property/${selectedProperty._id}`,
         { reason: rejectReason },
-        { headers: { Authorization: `Bearer ${token}` } }
+        authHeader
       );
       setPending((prev) => prev.filter((p) => p._id !== selectedProperty._id));
       closeModal();
+      toast.success("Property rejected");
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to reject property");
+      toast.error(err.response?.data?.message || "Failed to reject property");
     } finally {
-      updateProcessing(selectedProperty._id, false);
+      setProcessing(selectedProperty._id, false);
       setRejectReason("");
       setShowRejectReason(false);
     }
   };
 
-  const openModal = (property) => {
-    setSelectedProperty(property);
-    setRejectReason("");
-    setShowRejectReason(false);
-  };
-
-  const closeModal = () => {
-    setSelectedProperty(null);
-    setRejectReason("");
-    setShowRejectReason(false);
-  };
+  const openModal = (property) => { setSelectedProperty(property); setRejectReason(""); setShowRejectReason(false); };
+  const closeModal = () => { setSelectedProperty(null); setRejectReason(""); setShowRejectReason(false); };
 
   return (
-    <div style={{ maxWidth: 900, margin: "40px auto", padding: 32, background: "#fff", borderRadius: 10 }}>
-      <h1 style={{ fontSize: "2rem", marginBottom: 20 }}>Pending Property Approvals</h1>
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">Pending Property Approvals</h1>
 
-      {loading && <p>Loading pending properties...</p>}
+      <ConfirmModal
+        isOpen={!!confirmApprove}
+        title="Approve Property"
+        message="Approve this property? It will become visible to all users."
+        confirmLabel="Approve"
+        confirmClass="bg-green-600 hover:bg-green-700"
+        onConfirm={() => { approveProperty(confirmApprove); setConfirmApprove(null); }}
+        onCancel={() => setConfirmApprove(null)}
+      />
 
-      {error && (
-        <div style={{ backgroundColor: "#fee2e2", color: "#b71c1c", padding: 10, borderRadius: 6, marginBottom: 20 }}>
-          {error}
+      {loading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="animate-pulse h-16 rounded-xl bg-gray-100" />
+          ))}
         </div>
+      ) : pending.length === 0 ? (
+        <div className="text-center py-16 text-gray-500">No pending properties for approval</div>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {pending.map((p) => {
+              const isProcessing = processingIds.has(p._id);
+              return (
+                <div key={p._id} className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm flex flex-wrap justify-between items-center gap-3">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{p.title}</h3>
+                    <p className="text-sm text-gray-500">
+                      {p.ownerKYC?.ownerName || "N/A"} · {p.location?.city || "N/A"} · ₹{p.price}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => openModal(p)} className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-gray-50">
+                      View Details
+                    </button>
+                    <button
+                      onClick={() => setConfirmApprove(p._id)}
+                      disabled={isProcessing}
+                      className="px-3 py-1.5 rounded-lg bg-green-50 text-green-700 border border-green-200 text-sm font-medium hover:bg-green-100 disabled:opacity-50"
+                    >
+                      {isProcessing ? "Processing…" : "Approve"}
+                    </button>
+                    <button
+                      onClick={() => { openModal(p); setShowRejectReason(true); }}
+                      disabled={isProcessing}
+                      className="px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm font-medium hover:bg-red-100 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-6">
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        </>
       )}
 
-      {!loading && pending.length === 0 && <p>No pending properties for approval</p>}
-
-      {!loading && pending.length > 0 && (
-        <div>
-          {pending.map((p) => {
-            const isProcessing = processingIds.has(p._id);
-            return (
-              <div
-                key={p._id}
-                style={{
-                  border: "1px solid #ddd",
-                  padding: 16,
-                  borderRadius: 6,
-                  marginBottom: 12,
-                  boxShadow: "0 0 5px rgba(0,0,0,0.05)",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <div>
-                  <h3 style={{ margin: 0 }}>{p.title}</h3>
-                  <p style={{ margin: "6px 0" }}>
-                    Owner: {p.ownerKYC?.ownerName || "N/A"} | Type: {p.type} | City: {p.location?.city || "N/A"} | Price: ₹{p.price}
-                  </p>
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => openModal(p)}
-                    style={{
-                      padding: "8px 20px",
-                      backgroundColor: "#6b7280",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: "pointer",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    View Details
-                  </button>
-
-                  <button
-                    onClick={() => approveProperty(p._id)}
-                    disabled={isProcessing}
-                    style={{
-                      padding: "8px 20px",
-                      backgroundColor: "#2563eb",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: isProcessing ? "not-allowed" : "pointer",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {isProcessing ? "Processing..." : "Approve"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      openModal(p);
-                      setShowRejectReason(true);
-                    }}
-                    disabled={isProcessing}
-                    style={{
-                      padding: "8px 20px",
-                      backgroundColor: "#dc2626",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      cursor: isProcessing ? "not-allowed" : "pointer",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Modal for showing details and optionally reject reason */}
+      {/* Detail / reject modal */}
       {selectedProperty && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-          onClick={closeModal}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={closeModal}>
           <div
+            className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: "#fff",
-              borderRadius: 8,
-              maxWidth: "90vw",
-              maxHeight: "90vh",
-              overflowY: "auto",
-              padding: 24,
-              boxSizing: "border-box",
-              width: 700,
-            }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: 16 }}>{selectedProperty.title}</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{selectedProperty.title}</h2>
 
-            {/* Owner KYC Details */}
-            <section style={{ marginBottom: 20 }}>
-              <h3>Owner KYC Information</h3>
-              <p><b>Name:</b> {selectedProperty.ownerKYC?.ownerName}</p>
-              <p><b>Email:</b> {selectedProperty.ownerKYC?.ownerEmail}</p>
-              <p><b>Phone:</b> {selectedProperty.ownerKYC?.ownerPhone}</p>
-              <p><b>ID Type:</b> {selectedProperty.ownerKYC?.ownerIdType}</p>
-              <p><b>ID Number:</b> {selectedProperty.ownerKYC?.ownerIdNumber}</p>
-              {selectedProperty.ownerKYC?.ownerIdFile && (
-                <img
-            
-                src={`${API.defaults.baseURL.replace('/api', '')}/uploads/${selectedProperty.ownerKYC.ownerIdFile}`}
-                alt="Owner ID Document"
-                  style={{ maxWidth: "100%", borderRadius: 8, marginTop: 8 }}
-                />
-              )}
-            </section>
-
-            {/* Ownership Proof Details */}
-            <section style={{ marginBottom: 20 }}>
-              <h3>Ownership Proof</h3>
-              <p><b>Type:</b> {selectedProperty.ownershipProof?.ownershipProofType}</p>
-              <p><b>Document Number:</b> {selectedProperty.ownershipProof?.ownershipProofDocNumber || "N/A"}</p>
-              {selectedProperty.ownershipProof?.ownershipProofFile && (
-                <img
-                
-                  src={`${API.defaults.baseURL.replace('/api', '')}/uploads/${selectedProperty.ownershipProof.ownershipProofFile}`}
-                  alt="Ownership Proof Document"
-                  style={{ maxWidth: "100%", borderRadius: 8, marginTop: 8 }}
-                />
-              )}
-            </section>
-
-            {/* Property Images */}
-            <section style={{ marginBottom: 20 }}>
-              <h3>Property Images</h3>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {selectedProperty.images?.map((img, i) => (
-                  <img
-                    key={i}
-                     src={`${API.defaults.baseURL.replace('/api', '')}/uploads/${img}`}
-                    alt={`Property image ${i + 1}`}
-                    style={{ maxWidth: 150, borderRadius: 8 }}
-                    loading="lazy"
-                  />
-                ))}
+            <section className="mb-5">
+              <h3 className="font-semibold text-gray-700 mb-2">Owner KYC</h3>
+              <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
+                <div><span className="font-medium">Name:</span> {selectedProperty.ownerKYC?.ownerName}</div>
+                <div><span className="font-medium">Email:</span> {selectedProperty.ownerKYC?.ownerEmail}</div>
+                <div><span className="font-medium">Phone:</span> {selectedProperty.ownerKYC?.ownerPhone}</div>
+                <div><span className="font-medium">ID:</span> {selectedProperty.ownerKYC?.ownerIdType} — {selectedProperty.ownerKYC?.ownerIdNumber}</div>
               </div>
             </section>
 
-            {/* Description */}
-            <section style={{ marginBottom: 20 }}>
-              <h3>Description</h3>
-              <p style={{ whiteSpace: "pre-line" }}>{selectedProperty.description}</p>
+            <section className="mb-5">
+              <h3 className="font-semibold text-gray-700 mb-2">Description</h3>
+              <p className="text-sm text-gray-600 whitespace-pre-line">{selectedProperty.description}</p>
             </section>
 
-            {/* Reject Reason Input if reject button clicked */}
+            {selectedProperty.images?.length > 0 && (
+              <section className="mb-5">
+                <h3 className="font-semibold text-gray-700 mb-2">Images</h3>
+                <div className="flex flex-wrap gap-2">
+                  {selectedProperty.images.map((img, i) => (
+                    <img key={i} src={img} alt={`img-${i}`} className="h-20 rounded-lg object-cover border" loading="lazy" />
+                  ))}
+                </div>
+              </section>
+            )}
+
             {showRejectReason && (
-              <section>
-                <h3>Reject Reason</h3>
+              <section className="mb-4">
+                <h3 className="font-semibold text-gray-700 mb-2">Rejection Reason</h3>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="Write reason for rejection here..."
-                  style={{ width: "100%", borderRadius: 6, border: "1px solid #ccc", padding: 8, fontSize: 14 }}
+                  placeholder="Write reason for rejection…"
+                  className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-200 resize-none"
                 />
-                <div style={{ marginTop: 12, textAlign: "right" }}>
+                <div className="mt-3 flex gap-2 justify-end">
+                  <button onClick={() => { setShowRejectReason(false); setRejectReason(""); }} className="px-4 py-2 rounded-xl border text-sm">Cancel</button>
                   <button
-                    onClick={() => {
-                      rejectProperty();
-                    }}
+                    onClick={rejectProperty}
                     disabled={processingIds.has(selectedProperty._id)}
-                    style={{
-                      padding: "8px 20px",
-                      backgroundColor: "#dc2626",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      marginRight: 8,
-                    }}
+                    className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50"
                   >
-                    {processingIds.has(selectedProperty._id) ? "Processing..." : "Confirm Reject"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowRejectReason(false);
-                      setRejectReason("");
-                    }}
-                    style={{
-                      padding: "8px 20px",
-                      backgroundColor: "#aaa",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 4,
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancel
+                    {processingIds.has(selectedProperty._id) ? "Processing…" : "Confirm Reject"}
                   </button>
                 </div>
               </section>
             )}
 
-            {/* Close button */}
             {!showRejectReason && (
-              <button
-                onClick={closeModal}
-                style={{
-                  marginTop: 16,
-                  padding: "8px 20px",
-                  backgroundColor: "#ef4444",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 4,
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                }}
-              >
+              <button onClick={closeModal} className="mt-2 px-4 py-2 rounded-xl border text-sm font-medium hover:bg-gray-50">
                 Close
               </button>
             )}

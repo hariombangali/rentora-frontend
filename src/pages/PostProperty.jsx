@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "../utils/toast";
 
 const INITIAL_FORM_DATA = {
   title: "",
@@ -75,6 +76,22 @@ export default function PostProperty() {
   const [loadingPrefill, setLoadingPrefill] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [formErrors, setFormErrors] = useState({});
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Generate stable preview URLs; revoke when images change or component unmounts
+  const previewUrls = useMemo(
+    () => formData.images.map((file) => URL.createObjectURL(file)),
+    [formData.images]
+  );
+  useEffect(() => () => previewUrls.forEach((url) => URL.revokeObjectURL(url)), [previewUrls]);
+
+  // Warn before leaving with unsaved changes
+  useEffect(() => {
+    if (!isDirty) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
 
   useEffect(() => {
     if (user?.role === "owner") {
@@ -93,13 +110,14 @@ export default function PostProperty() {
 
   const handleChange = useCallback(
     (e) => {
+      setIsDirty(true);
       const { name, value, type, files } = e.target;
       if (type === "file") {
         if (name === "images") {
           const newFiles = Array.from(files);
           setFormData((prev) => ({ ...prev, images: [...prev.images, ...newFiles].slice(0, 8) }));
         } else {
-          setFormData((prev) => ({ ...prev, [name]: files[0] }));    
+          setFormData((prev) => ({ ...prev, [name]: files[0] }));
         }
       } else {
         setField(name, value);
@@ -109,6 +127,7 @@ export default function PostProperty() {
   );
 
   const handleChipArrayToggle = useCallback((name, value) => {
+    setIsDirty(true);
     setFormData((prev) => ({
       ...prev,
       [name]: prev[name].includes(value)
@@ -201,7 +220,7 @@ export default function PostProperty() {
         if (firstErrorStepIndex !== -1) {
           setStep(firstErrorStepIndex + 1);
         }
-        alert("Please review the form and fix the highlighted errors.");
+        toast.error("Please review the form and fix the highlighted errors.");
         return;
       }
 
@@ -246,7 +265,7 @@ export default function PostProperty() {
           state: { success: isEdit ? "Property updated successfully!" : "Property posted successfully!" },
         });
       } catch (err) {
-        alert(err.response?.data?.message || (isEdit ? "Failed to update property." : "Failed to post property."));
+        toast.error(err.response?.data?.message || (isEdit ? "Failed to update property." : "Failed to post property."));
         console.error(err);
       } finally {
         setUploading(false);
@@ -310,7 +329,7 @@ export default function PostProperty() {
         setExistingImages(Array.isArray(p.images) ? p.images : []);
       } catch (e) {
         console.error(e);
-        alert("Failed to load property for editing");
+        toast.error("Failed to load property for editing");
       } finally {
         setLoadingPrefill(false);
       }
@@ -808,12 +827,11 @@ export default function PostProperty() {
               )}
               <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
                 <h4 className="font-bold text-lg text-blue-600 mb-3">Photos</h4>
-                {formData.images.length > 0 ? (
+                {previewUrls.length > 0 ? (
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {formData.images.map((file, idx) => {
-                      const url = URL.createObjectURL(file);
-                      return (<img key={idx} src={url} alt={`Property ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-200" onLoad={() => URL.revokeObjectURL(url)} />);
-                    })}
+                    {previewUrls.map((url, idx) => (
+                      <img key={idx} src={url} alt={`Property ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-200" />
+                    ))}
                   </div>
                 ) : (<p className="text-gray-500">No photos uploaded</p>)}
               </div>

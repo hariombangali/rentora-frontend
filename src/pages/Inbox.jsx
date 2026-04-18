@@ -1,19 +1,26 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue } from "react";
+import { io } from "socket.io-client";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
 
-// Helpers
+const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace("/api", "");
+
 const initials = (name = "U") =>
   name.trim().split(/\s+/).map((s) => s?.[0]?.toUpperCase() || "").slice(0, 2).join("") || "U";
 
 const formatTime = (iso) =>
   iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
 
+const getRoomKey = (a, b, propId) => {
+  const parts = [String(a), String(b)];
+  if (propId) parts.push(String(propId));
+  return `conv_${parts.sort().join("_")}`;
+};
+
 export default function Inbox() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
-  const [filtered, setFiltered] = useState([]);
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
@@ -21,42 +28,100 @@ export default function Inbox() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
   const [query, setQuery] = useState("");
+  const [partnerTyping, setPartnerTyping] = useState(false);
   const location = useLocation();
   const initialConversation = location.state?.conversation || null;
 
   const listRef = useRef(null);
   const bottomRef = useRef(null);
+  const socketRef = useRef(null);
+  const typingTimerRef = useRef(null);
 
-  // Auto-scroll to bottom on message updates
+  // Debounce search with useDeferredValue
+  const deferredQuery = useDeferredValue(query);
+
+  // Auto-scroll on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, selectedConversation]);
+  }, [messages, partnerTyping]);
 
-  // Helper: build conversation key
   const convKeyOf = (c) =>
     c ? `${c.partner?._id || ""}_${c.property?._id || "noProperty"}` : "";
 
-  // Fetch conversations, merge initialConversation if provided (stub or real)
+  // --- Socket.io setup ---
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const socket = io(SOCKET_URL, {
+      auth: { token },
+      transports: ["websocket"],
+    });
+    socketRef.current = socket;
+    return () => socket.disconnect();
+  }, []);
+
+  // Join room and listen for events when conversation changes
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !selectedConversation || !user) return;
+
+    const partnerId = selectedConversation.partner?._id;
+    const propId = selectedConversation.property?._id;
+    const roomKey = getRoomKey(user._id, partnerId, propId);
+
+    socket.emit("join_room", { senderId: user._id, receiverId: partnerId, propertyId: propId });
+
+    const handleReceive = (msg) => {
+      // Only append if from partner (our own messages already appended optimistically)
+      const senderId = msg.sender?._id?.toString() || msg.sender?.toString();
+      if (senderId !== user._id?.toString()) {
+        setMessages((prev) => [...prev, msg]);
+        // Update conversation preview
+        setConversations((prev) =>
+          prev.map((c) =>
+            convKeyOf(c) === convKeyOf(selectedConversation)
+              ? { ...c, lastMessage: msg.content, updatedAt: msg.createdAt }
+              : c
+          )
+        );
+      }
+    };
+
+    const handleTyping = ({ senderId }) => {
+      if (senderId !== user._id?.toString()) setPartnerTyping(true);
+    };
+
+    const handleStopTyping = ({ senderId }) => {
+      if (senderId !== user._id?.toString()) setPartnerTyping(false);
+    };
+
+    socket.on("receive_message", handleReceive);
+    socket.on("user_typing", handleTyping);
+    socket.on("user_stop_typing", handleStopTyping);
+
+    return () => {
+      socket.off("receive_message", handleReceive);
+      socket.off("user_typing", handleTyping);
+      socket.off("user_stop_typing", handleStopTyping);
+      setPartnerTyping(false);
+    };
+  }, [selectedConversation, user]);
+
+  // Fetch conversations
   useEffect(() => {
     const fetchConversations = async () => {
       try {
         setLoadingConvs(true);
         const token = localStorage.getItem("token");
         const res = await API.get("/messages/conversations", {
-          withCredentials: true,
           headers: { Authorization: `Bearer ${token}` },
         });
-        const data = Array.isArray(res.data) ? res.data : [];
-        // If deep-linked conversation exists and not in list, merge it
+        const data = Array.isArray(res.data) ? res.data : (res.data?.conversations ?? []);
         if (initialConversation) {
           const listKeys = new Set(data.map(convKeyOf));
           const initKey = convKeyOf(initialConversation);
-          if (initKey && !listKeys.has(initKey)) {
-            data.unshift(initialConversation);
-          }
+          if (initKey && !listKeys.has(initKey)) data.unshift(initialConversation);
         }
         setConversations(data);
-        setFiltered(data);
         if (initialConversation) setSelectedConversation(initialConversation);
       } catch (err) {
         console.error("Failed to load conversations", err);
@@ -67,31 +132,24 @@ export default function Inbox() {
     fetchConversations();
   }, [initialConversation]);
 
-  // Search filter with safe fallbacks
-  useEffect(() => {
-    if (!query.trim()) {
-      setFiltered(conversations);
-      return;
-    }
-    const q = query.toLowerCase();
-    setFiltered(
-      conversations.filter((c) => {
-        const name = c.partner?.ownerKYC?.ownerName || c.partner?.name || "";
-        const title = c.property?.title || "";
-        const last = c.lastMessage || "";
-        return (
-          name.toLowerCase().includes(q) ||
-          title.toLowerCase().includes(q) ||
-          last.toLowerCase().includes(q)
-        );
-      })
-    );
-  }, [query, conversations]);
+  // Filtered list (debounced)
+  const filtered = useMemo(() => {
+    if (!deferredQuery.trim()) return conversations;
+    const q = deferredQuery.toLowerCase();
+    return conversations.filter((c) => {
+      const name = c.partner?.ownerKYC?.ownerName || c.partner?.name || "";
+      return (
+        name.toLowerCase().includes(q) ||
+        (c.property?.title || "").toLowerCase().includes(q) ||
+        (c.lastMessage || "").toLowerCase().includes(q)
+      );
+    });
+  }, [deferredQuery, conversations]);
 
-  // Fetch messages when a conversation is selected (property-scoped if present)
+  // Fetch messages for selected conversation
   useEffect(() => {
+    if (!selectedConversation) return;
     const fetchMessages = async () => {
-      if (!selectedConversation) return;
       try {
         setLoadingMsgs(true);
         const token = localStorage.getItem("token");
@@ -100,24 +158,15 @@ export default function Inbox() {
         const url = propId
           ? `/messages/${partnerId}?propertyId=${propId}`
           : `/messages/${partnerId}`;
-        const res = await API.get(url, {
-          withCredentials: true,
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await API.get(url, { headers: { Authorization: `Bearer ${token}` } });
         setMessages(res.data || []);
-        // Mark as read locally (optional visual)
         setConversations((prev) =>
           prev.map((c) =>
-            convKeyOf(c) === convKeyOf(selectedConversation)
-              ? { ...c, unreadCount: 0 }
-              : c
+            convKeyOf(c) === convKeyOf(selectedConversation) ? { ...c, unreadCount: 0 } : c
           )
         );
         requestAnimationFrame(() => {
-          listRef.current?.scrollTo({
-            top: listRef.current.scrollHeight,
-            behavior: "smooth",
-          });
+          listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
         });
       } catch (err) {
         console.error("Failed to load messages", err);
@@ -128,9 +177,33 @@ export default function Inbox() {
     fetchMessages();
   }, [selectedConversation]);
 
-  // Send message into current conversation (property optional)
+  // Emit typing events
+  const handleTypingInput = useCallback(
+    (e) => {
+      setNewMessage(e.target.value);
+      if (!selectedConversation || !user || !socketRef.current) return;
+      const partnerId = selectedConversation.partner?._id;
+      const propId = selectedConversation.property?._id;
+      const roomKey = getRoomKey(user._id, partnerId, propId);
+      socketRef.current.emit("typing", { senderId: user._id, receiverId: partnerId, propertyId: propId });
+      clearTimeout(typingTimerRef.current);
+      typingTimerRef.current = setTimeout(() => {
+        socketRef.current?.emit("stop_typing", { senderId: user._id, receiverId: partnerId, propertyId: propId });
+      }, 1500);
+    },
+    [selectedConversation, user]
+  );
+
   const handleSend = useCallback(async () => {
     if (!newMessage.trim() || !selectedConversation || sending) return;
+    // Stop typing indicator immediately
+    if (socketRef.current && user && selectedConversation) {
+      const partnerId = selectedConversation.partner?._id;
+      const propId = selectedConversation.property?._id;
+      const roomKey = getRoomKey(user._id, partnerId, propId);
+      socketRef.current.emit("stop_typing", { senderId: user._id, receiverId: partnerId, propertyId: selectedConversation.property?._id });
+      clearTimeout(typingTimerRef.current);
+    }
     try {
       setSending(true);
       const token = localStorage.getItem("token");
@@ -140,37 +213,27 @@ export default function Inbox() {
         content: newMessage.trim(),
       };
       const res = await API.post("/messages", payload, {
-        withCredentials: true,
         headers: { Authorization: `Bearer ${token}` },
       });
       setMessages((prev) => [...prev, res.data]);
       setNewMessage("");
-      // Ensure list preview updates
       setConversations((prev) => {
         const key = convKeyOf(selectedConversation);
-        const next = [...prev];
-        const idx = next.findIndex((c) => convKeyOf(c) === key);
-        if (idx >= 0) {
-          next[idx] = {
-            ...next[idx],
-            lastMessage: res.data?.content || next[idx].lastMessage,
-            updatedAt: res.data?.createdAt || next[idx].updatedAt,
-          };
-        }
-        return next;
+        return prev.map((c) =>
+          convKeyOf(c) === key
+            ? { ...c, lastMessage: res.data?.content, updatedAt: res.data?.createdAt }
+            : c
+        );
       });
       requestAnimationFrame(() => {
-        listRef.current?.scrollTo({
-          top: listRef.current.scrollHeight,
-          behavior: "smooth",
-        });
+        listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
       });
     } catch (err) {
       console.error("Failed to send", err);
     } finally {
       setSending(false);
     }
-  }, [newMessage, selectedConversation, sending]);
+  }, [newMessage, selectedConversation, sending, user]);
 
   const onKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -179,7 +242,6 @@ export default function Inbox() {
     }
   };
 
-  // Safe header fallbacks
   const headerName = useMemo(
     () =>
       selectedConversation?.partner?.ownerKYC?.ownerName ||
@@ -189,11 +251,7 @@ export default function Inbox() {
   );
   const headerProp = selectedConversation?.property?.title || "Property";
 
-  // Responsive master-detail:
-  // - Mobile: show only list OR chat (back button in chat header)
-  // - md+: show both panes
   const showListMobile = !selectedConversation;
-  const showChatMobile = !!selectedConversation;
 
   return (
     <div className="flex h-[100dvh] bg-gradient-to-b from-gray-50 to-gray-100">
@@ -233,9 +291,9 @@ export default function Inbox() {
           {loadingConvs ? (
             [...Array(6)].map((_, i) => (
               <div key={i} className="p-4 animate-pulse">
-                <div className="h-4 w-24 bg-gray-200 rounded mb-2"></div>
-                <div className="h-3 w-40 bg-gray-100 rounded mb-2"></div>
-                <div className="h-2 w-32 bg-gray-100 rounded"></div>
+                <div className="h-4 w-24 bg-gray-200 rounded mb-2" />
+                <div className="h-3 w-40 bg-gray-100 rounded mb-2" />
+                <div className="h-2 w-32 bg-gray-100 rounded" />
               </div>
             ))
           ) : filtered.length === 0 ? (
@@ -247,11 +305,7 @@ export default function Inbox() {
                 conv.partner?._id === selectedConversation.partner?._id &&
                 (conv.property?._id || "noProperty") ===
                   (selectedConversation.property?._id || "noProperty");
-
-              const name =
-                conv.partner?.ownerKYC?.ownerName || conv.partner?.name || "Unknown";
-              const title = conv.property?.title || "Property";
-              const preview = conv.lastMessage || "Tap to view messages";
+              const name = conv.partner?.ownerKYC?.ownerName || conv.partner?.name || "Unknown";
               const unread = Number(conv.unreadCount) > 0;
               const time = formatTime(conv.updatedAt || conv.lastMessageAt);
 
@@ -269,7 +323,7 @@ export default function Inbox() {
                         {initials(name)}
                       </div>
                       {unread && (
-                        <span className="absolute -right-1 -top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+                        <span className="absolute -right-1 -top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -277,13 +331,11 @@ export default function Inbox() {
                         <p className="font-medium text-gray-900 truncate">{name}</p>
                         {time && <span className="text-[11px] text-gray-400 ml-2">{time}</span>}
                       </div>
-                      <p className="text-xs text-gray-500 italic truncate">{title}</p>
-                      <p
-                        className={`text-sm truncate mt-0.5 ${
-                          unread ? "text-gray-900 font-medium" : "text-gray-600"
-                        }`}
-                      >
-                        {preview}
+                      <p className="text-xs text-gray-500 italic truncate">
+                        {conv.property?.title || "Property"}
+                      </p>
+                      <p className={`text-sm truncate mt-0.5 ${unread ? "text-gray-900 font-medium" : "text-gray-600"}`}>
+                        {conv.lastMessage || "Tap to view messages"}
                       </p>
                     </div>
                   </div>
@@ -297,7 +349,7 @@ export default function Inbox() {
       {/* Chat pane */}
       <section
         className={`${
-          showChatMobile ? "flex" : "hidden"
+          showListMobile ? "hidden" : "flex"
         } md:flex flex-1 flex-col min-w-0`}
       >
         {selectedConversation ? (
@@ -305,7 +357,6 @@ export default function Inbox() {
             {/* Header */}
             <div className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur px-4 py-3">
               <div className="flex items-center gap-3">
-                {/* Back on mobile */}
                 <button
                   className="md:hidden -ml-2 mr-1 px-2 py-1 rounded hover:bg-gray-100"
                   onClick={() => setSelectedConversation(null)}
@@ -333,12 +384,10 @@ export default function Inbox() {
                 [...Array(8)].map((_, i) => (
                   <div
                     key={i}
-                    className={`flex gap-2 items-start ${
-                      i % 2 ? "justify-end" : "justify-start"
-                    } animate-pulse`}
+                    className={`flex gap-2 items-start ${i % 2 ? "justify-end" : "justify-start"} animate-pulse`}
                   >
-                    <div className="w-8 h-8 rounded-full bg-gray-200"></div>
-                    <div className="h-14 w-56 max-w-[70%] rounded-2xl bg-gray-200"></div>
+                    <div className="w-8 h-8 rounded-full bg-gray-200" />
+                    <div className="h-14 w-56 max-w-[70%] rounded-2xl bg-gray-200" />
                   </div>
                 ))
               ) : messages.length === 0 ? (
@@ -350,13 +399,10 @@ export default function Inbox() {
                   const mine =
                     msg.sender?._id?.toString() === user._id?.toString() ||
                     msg.sender?.toString() === user._id?.toString();
-                  const time = formatTime(msg.createdAt);
                   return (
                     <div
                       key={msg._id}
-                      className={`flex w-full items-end gap-2 ${
-                        mine ? "justify-end" : "justify-start"
-                      }`}
+                      className={`flex w-full items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}
                     >
                       {!mine && (
                         <div className="w-8 h-8 rounded-full bg-gray-200 grid place-items-center text-[11px] font-medium">
@@ -364,7 +410,7 @@ export default function Inbox() {
                         </div>
                       )}
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] md:max-w-[65%] rounded-2xl px-4 py-2.5 shadow-sm transition ${
+                        className={`max-w-[85%] sm:max-w-[75%] md:max-w-[65%] rounded-2xl px-4 py-2.5 shadow-sm ${
                           mine
                             ? "bg-blue-600 text-white rounded-br-md"
                             : "bg-gray-100 text-gray-900 rounded-bl-md"
@@ -372,7 +418,7 @@ export default function Inbox() {
                       >
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                         <div className={`mt-1.5 text-[11px] ${mine ? "text-white/80" : "text-gray-500"}`}>
-                          {time}
+                          {formatTime(msg.createdAt)}
                         </div>
                       </div>
                       {mine && (
@@ -384,21 +430,40 @@ export default function Inbox() {
                   );
                 })
               )}
+
+              {/* Typing indicator */}
+              {partnerTyping && (
+                <div className="flex items-end gap-2 justify-start">
+                  <div className="w-8 h-8 rounded-full bg-gray-200 grid place-items-center text-[11px] font-medium">
+                    {initials(headerName)}
+                  </div>
+                  <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1">
+                    {[0, 150, 300].map((delay) => (
+                      <span
+                        key={delay}
+                        className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                        style={{ animationDelay: `${delay}ms` }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div ref={bottomRef} />
             </div>
 
             {/* Composer */}
             <div
-              className="border-t bg-white/80 backdrop-blur px-0.8 py-3 sticky bottom-0"
+              className="border-t bg-white/80 backdrop-blur px-3 py-3 sticky bottom-0"
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
             >
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   placeholder="Type a message…"
-                  className="flex-1 border border-gray-200 rounded-xl px-1 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition"
+                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={handleTypingInput}
                   onKeyDown={onKeyDown}
                   disabled={sending}
                 />

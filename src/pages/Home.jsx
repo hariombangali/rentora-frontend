@@ -24,14 +24,22 @@ export default function Home() {
   const [searchLocation, setSearchLocation] = useState('');
   const [searchType, setSearchType] = useState('');
 
+  const CACHE_KEY = “home_data_v1”;
+  const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
   useEffect(() => {
+    // Serve from cache immediately if fresh
+    try {
+      const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || “null”);
+      if (cached && Date.now() - cached.ts < CACHE_TTL) {
+        setData(cached.data);
+        setLoading(false);
+      }
+    } catch {}
     fetchAll();
   }, []);
 
   async function fetchAll() {
-    setLoading(true);
-    setError("");
-
     try {
       const [
         homeRes,
@@ -40,11 +48,11 @@ export default function Home() {
         testimonialsRes,
         countersRes
       ] = await Promise.allSettled([
-        API.get('/home'),                      // static blocks + small latest slice
-        API.get('/properties/featured?limit=10'), // featured carousel (fallback to latest if not using featured)
-        API.get('/home/areas/popular?limit=12'),  // dynamic “Top Areas”
-        API.get('/testimonials?limit=6&page=1'),  // testimonials (optional pagination)
-        API.get('/home/counters')                // hero counters
+        API.get('/home'),
+        API.get('/properties/featured?limit=10'),
+        API.get('/home/areas/popular?limit=12'),
+        API.get('/testimonials?limit=6&page=1'),
+        API.get('/home/counters')
       ]);
 
       const next = { ...data };
@@ -99,6 +107,7 @@ export default function Home() {
       }
 
       setData(next);
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data: next })); } catch {}
     } catch (err) {
       setError(err.response?.data?.message || "Failed to load home page data");
     } finally {
@@ -122,8 +131,8 @@ export default function Home() {
   };
 
 
-  if (loading) return <FullPageLoader message="Loading..." />;
-  if (error) return <div className="p-6 text-center text-red-600">{error}</div>;
+  if (loading && !data.latestProperties.length) return <FullPageLoader message="Loading..." />;
+  if (error && !data.latestProperties.length) return <div className="p-6 text-center text-red-600">{error}</div>;
 
   return (
     <div className="bg-white min-h-screen">
@@ -232,8 +241,8 @@ export default function Home() {
         </div>
         <div className="relative">
           <div className="flex gap-6 overflow-x-auto pb-6 scrollbar-hide">
-            {(data.featured || []).map((property, i) => (
-              <div key={`${property._id}-${i}`} className="min-w-[300px]">
+            {(data.featured || []).map((property) => (
+              <div key={property._id} className="min-w-[300px]">
                 <PropertyCard property={property} wishlistIds={wishlistIds} />
               </div>
             ))}

@@ -1,287 +1,234 @@
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import {
+  Facebook,
+  Twitter,
+  Instagram,
+  Linkedin,
+  Mail,
+  MapPin,
+  Phone,
+  ArrowUpRight,
+} from "lucide-react";
 
-function FacebookIcon(props) {
+function FooterTitle({ children }) {
   return (
-    <svg {...props} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M17 2.1A2.1 2.1 0 0 1 19.1 4.2V19.8A2.1 2.1 0 0 1 17 21.9H7A2.1 2.1 0 0 1 4.9 19.8V4.2A2.1 2.1 0 0 1 7 2.1h10zm-2.67 5.7h-1.48c-.32 0-.55.16-.55.56V10h2l-.27 2h-1.73V18h-2.1v-6H8.7v-2h1.2V7.93A2.27 2.27 0 0 1 12.22 6h2.11v2.1z" />
-    </svg>
+    <h3 className="text-sm font-semibold tracking-wide text-white">
+      {children}
+    </h3>
   );
 }
-function TwitterIcon(props) {
+
+function FooterLink({ to, href, children, external = false }) {
+  const base =
+    "group relative inline-flex w-fit items-center gap-1 text-sm text-white/70 transition-colors hover:text-white";
+  const underline =
+    "after:absolute after:-bottom-0.5 after:left-0 after:h-px after:w-0 after:bg-white/70 after:transition-all after:duration-300 after:ease-out hover:after:w-full";
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={external ? "_blank" : undefined}
+        rel={external ? "noopener noreferrer" : undefined}
+        className={`${base} ${underline}`}
+      >
+        {children}
+        {external ? (
+          <ArrowUpRight className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+        ) : null}
+      </a>
+    );
+  }
+
   return (
-    <svg {...props} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M19.633 7.997c.013.18.013.363.013.545 0 5.553-4.227 11.954-11.954 11.954-2.376 0-4.588-.698-6.45-1.893a8.457 8.457 0 0 0 6.24-1.747 4.184 4.184 0 0 1-3.907-2.898c.259.049.519.075.792.075a4.177 4.177 0 0 0 1.785-.222 4.179 4.179 0 0 1-3.349-4.096v-.053a4.198 4.198 0 0 0 1.878.524 4.182 4.182 0 0 1-1.293-5.58A11.88 11.88 0 0 0 12.065 8.55a4.72 4.72 0 0 1-.104-.956A4.182 4.182 0 0 1 16.46 3.84a8.392 8.392 0 0 0 2.661-1.015 4.174 4.174 0 0 1-1.836 2.307 8.392 8.392 0 0 0 2.432-.661 8.972 8.972 0 0 1-2.087 2.153z" />
-    </svg>
+    <Link to={to} className={`${base} ${underline}`}>
+      {children}
+    </Link>
   );
 }
-function EmailIcon(props) {
+
+function SocialButton({ href, label, Icon }) {
   return (
-    <svg {...props} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5v10h16V8zm-8 3 8-5H4l8 5z" />
-    </svg>
+    <motion.a
+      href={href}
+      aria-label={label}
+      target={href?.startsWith("mailto:") ? undefined : "_blank"}
+      rel={href?.startsWith("mailto:") ? undefined : "noopener noreferrer"}
+      whileHover={{ y: -2, scale: 1.04 }}
+      whileTap={{ scale: 0.97 }}
+      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/80 shadow-sm shadow-black/20 backdrop-blur transition-colors hover:bg-white/10 hover:text-white focus:outline-none focus:ring-4 focus:ring-white/10"
+    >
+      <Icon className="h-5 w-5" />
+    </motion.a>
+  );
+}
+
+function ContactRow({ Icon, children }) {
+  return (
+    <div className="flex items-start gap-3 text-sm text-white/70">
+      <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-white/80">
+        <Icon className="h-4.5 w-4.5" />
+      </span>
+      <div className="leading-relaxed">{children}</div>
+    </div>
   );
 }
 
 export default function Footer() {
-  const socialLinks = [
-    { href: "https://facebook.com/", label: "Facebook", Icon: FacebookIcon },
-    { href: "https://twitter.com/", label: "Twitter", Icon: TwitterIcon },
-    { href: "mailto:info@room4rentindore.com", label: "Email", Icon: EmailIcon },
+  const year = new Date().getFullYear();
+
+  const quickLinks = [
+    { to: "/properties", label: "Browse listings" },
+    { to: "/owner/list-property", label: "List your property" },
+    { to: "/areas", label: "Popular areas" },
+    { to: "/sitemap", label: "Sitemap" },
   ];
 
-  // Static for now; can be wired to your Top Areas API
-  const popularAreas = [
-    "Vijay Nagar",
-    "Gita Bhawan",
-    "Khajrana",
-    "Mahalaxmi Nagar",
-    "Sapna Sangeeta",
+  const supportLinks = [
+    { to: "/about", label: "About" },
+    { to: "/contact", label: "Contact" },
+    { to: "/help", label: "Help center" },
+    { to: "/terms", label: "Terms" },
+    { to: "/privacy", label: "Privacy" },
   ];
 
-  const propertyTypes = [
-    { label: "Flats", value: "flat" },
-    { label: "Rooms", value: "room" },
-    { label: "PGs", value: "pg" },
-    { label: "Hostels", value: "hostel" },
+  const socials = [
+    { href: "https://facebook.com/", label: "Facebook", Icon: Facebook },
+    { href: "https://twitter.com/", label: "Twitter", Icon: Twitter },
+    { href: "https://instagram.com/", label: "Instagram", Icon: Instagram },
+    { href: "https://linkedin.com/", label: "LinkedIn", Icon: Linkedin },
+    { href: "mailto:info@room4rentindore.com", label: "Email", Icon: Mail },
   ];
 
   return (
-    <footer
+    <motion.footer
       aria-label="Footer"
-      className="mt-16 w-full bg-gradient-to-tr from-blue-800 to-blue-600 text-white pt-12 pb-8 px-6 sm:px-8"
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+      className="mt-16 border-t border-white/10 bg-[#070A12] text-white"
     >
-      <div className="max-w-7xl mx-auto">
-        {/* Top grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4">
-          {/* Brand + contact */}
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="inline-block w-9 h-9 rounded bg-yellow-300" aria-hidden="true" />
-              <span className="font-extrabold text-2xl tracking-wide">
-                Room4Rent <span className="text-yellow-300">Indore</span>
-              </span>
-            </div>
-            <p className="mt-3 text-blue-100">
-              Verified rooms, PGs, and flats across Indore—find and move with confidence.
-            </p>
-
-            <div className="mt-4 space-y-1 text-sm text-blue-100/90">
-              <p>Indore, Madhya Pradesh</p>
-              <p>
-                Email:{" "}
-                <a
-                  href="mailto:info@room4rentindore.com"
-                  className="underline decoration-yellow-300 hover:text-yellow-300"
-                >
-                  info@room4rentindore.com
-                </a>
-              </p>
-            </div>
-
-            <div className="mt-4 flex gap-3" aria-label="Social links">
-              {socialLinks.map(({ href, label, Icon }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target={href.startsWith("mailto:") ? undefined : "_blank"}
-                  rel={href.startsWith("mailto:") ? undefined : "noopener noreferrer"}
-                  aria-label={label}
-                  className="p-2 rounded-full bg-white/10 hover:bg-yellow-300 hover:text-blue-900 transition"
-                >
-                  <Icon className="w-5 h-5" />
-                </a>
-              ))}
-            </div>
-
-            {/* Newsletter */}
-            <form
-              className="mt-5"
-              onSubmit={(e) => e.preventDefault()}
-              aria-label="Newsletter signup"
-            >
-              <label htmlFor="email-sub" className="sr-only">
-                Subscribe for updates
-              </label>
-              <div className="flex rounded-lg overflow-hidden border border-white/20 bg-white/10 backdrop-blur-sm">
-                <input
-                  id="email-sub"
-                  type="email"
-                  placeholder="Enter email for rental updates"
-                  className="flex-1 bg-transparent px-3 py-2 text-sm placeholder-blue-100/70 outline-none"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="bg-yellow-300 text-blue-900 px-3 py-2 text-sm font-semibold hover:bg-yellow-200"
-                >
-                  Subscribe
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-blue-100/80">
-                No spam, unsubscribe anytime.
-              </p>
-            </form>
-          </div>
-
-          {/* Explore */}
-          <nav aria-label="Explore" className="text-sm">
-            {/* Mobile accordion */}
-            <details className="md:hidden group">
-              <summary className="flex items-center justify-between cursor-pointer select-none py-2">
-                <span className="font-semibold text-yellow-200">Explore</span>
-                <span className="transition-transform group-open:rotate-180">⌄</span>
-              </summary>
-              <ul role="list" className="mt-2 space-y-2 pl-1">
-                <li>
-                  <Link to="/properties" className="hover:underline">
-                    Browse Listings
-                  </Link>
-                </li>
-                {propertyTypes.map((t) => (
-                  <li key={t.value}>
-                    <Link
-                      to={`/properties?occupancyType=${t.value}`}
-                      className="hover:underline"
-                    >
-                      {t.label}
-                    </Link>
-                  </li>
-                ))}
-                <li>
-                  <Link to="/owner/list-property" className="hover:underline">
-                    List Your Property
-                  </Link>
-                </li>
-              </ul>
-            </details>
-            {/* Desktop list */}
-            <div className="hidden md:block">
-              <h3 className="font-semibold text-yellow-200">Explore</h3>
-              <ul role="list" className="mt-3 space-y-2">
-                <li>
-                  <Link to="/properties" className="hover:underline">
-                    Browse Listings
-                  </Link>
-                </li>
-                {propertyTypes.map((t) => (
-                  <li key={t.value}>
-                    <Link
-                      to={`/properties?occupancyType=${t.value}`}
-                      className="hover:underline"
-                    >
-                      {t.label}
-                    </Link>
-                  </li>
-                ))}
-                <li>
-                  <Link to="/owner/list-property" className="hover:underline">
-                    List Your Property
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </nav>
-
-          {/* Popular Areas */}
-          <nav aria-label="Popular Areas" className="text-sm">
-            {/* Mobile accordion */}
-            <details className="md:hidden group">
-              <summary className="flex items-center justify-between cursor-pointer select-none py-2">
-                <span className="font-semibold text-yellow-200">Popular Areas</span>
-                <span className="transition-transform group-open:rotate-180">⌄</span>
-              </summary>
-              <ul role="list" className="mt-2 space-y-2 pl-1">
-                {popularAreas.map((name) => (
-                  <li key={name}>
-                    <Link
-                      to={`/properties?area=${encodeURIComponent(name)}`}
-                      className="hover:underline"
-                    >
-                      {name}
-                    </Link>
-                  </li>
-                ))}
-                <li>
-                  <Link to="/areas" className="hover:underline">
-                    See All Areas
-                  </Link>
-                </li>
-              </ul>
-            </details>
-            {/* Desktop list */}
-            <div className="hidden md:block">
-              <h3 className="font-semibold text-yellow-200">Popular Areas</h3>
-              <ul role="list" className="mt-3 space-y-2">
-                {popularAreas.map((name) => (
-                  <li key={name}>
-                    <Link
-                      to={`/properties?area=${encodeURIComponent(name)}`}
-                      className="hover:underline"
-                    >
-                      {name}
-                    </Link>
-                  </li>
-                ))}
-                <li>
-                  <Link to="/areas" className="hover:underline">
-                    See All Areas
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </nav>
-
-          {/* Support & Legal */}
-          <nav aria-label="Support and Legal" className="text-sm">
-            {/* Mobile accordion */}
-            <details className="md:hidden group">
-              <summary className="flex items-center justify-between cursor-pointer select-none py-2">
-                <span className="font-semibold text-yellow-200">Support &amp; Legal</span>
-                <span className="transition-transform group-open:rotate-180">⌄</span>
-              </summary>
-              <ul role="list" className="mt-2 space-y-2 pl-1">
-                <li><Link to="/about" className="hover:underline">About</Link></li>
-                <li><Link to="/contact" className="hover:underline">Contact Us</Link></li>
-                <li><Link to="/help" className="hover:underline">Help Center</Link></li>
-                <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
-                <li><Link to="/privacy" className="hover:underline">Privacy Policy</Link></li>
-              </ul>
-              <div className="mt-3 flex gap-2">
-                <a aria-label="App Store" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold"> App Store</a>
-                <a aria-label="Google Play" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold">▶ Google Play</a>
-              </div>
-            </details>
-            {/* Desktop list */}
-            <div className="hidden md:block">
-              <h3 className="font-semibold text-yellow-200">Support &amp; Legal</h3>
-              <ul role="list" className="mt-3 space-y-2">
-                <li><Link to="/about" className="hover:underline">About</Link></li>
-                <li><Link to="/contact" className="hover:underline">Contact Us</Link></li>
-                <li><Link to="/help" className="hover:underline">Help Center</Link></li>
-                <li><Link to="/terms" className="hover:underline">Terms of Service</Link></li>
-                <li><Link to="/privacy" className="hover:underline">Privacy Policy</Link></li>
-              </ul>
-              <div className="mt-4 flex gap-2">
-                <a aria-label="App Store" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold"> App Store</a>
-                <a aria-label="Google Play" href="#" className="bg-black text-white px-3 py-2 rounded-lg text-xs font-semibold">▶ Google Play</a>
-              </div>
-            </div>
-          </nav>
-        </div>
-
-        {/* Divider */}
-        <div className="my-6 border-t border-white/20"></div>
-
-        {/* Bottom bar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-xs md:text-sm text-blue-100/90">
-          <span>© 2025 Room4Rent Indore. All rights reserved.</span>
-          <div className="flex items-center gap-3">
-            <Link to="/sitemap" className="hover:underline">Sitemap</Link>
-            <span className="hidden md:inline">•</span>
-            <span>Made with <span className="text-pink-300">♥</span> in Indore</span>
-          </div>
+      {/* Subtle background accents */}
+      <div className="pointer-events-none relative">
+        <div className="absolute inset-0 -z-10 overflow-hidden">
+          <div className="absolute -left-36 top-10 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
+          <div className="absolute -right-36 bottom-0 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.06),_transparent_55%)]" />
         </div>
       </div>
-    </footer>
+
+      <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+        {/* Main card */}
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="grid gap-10 px-6 py-10 sm:px-8 lg:grid-cols-4 lg:gap-12 lg:px-10">
+            {/* Brand / About */}
+            <div className="lg:col-span-1">
+              <div className="flex items-center gap-3">
+                <div className="grid h-11 w-11 place-items-center rounded-2xl border border-white/10 bg-white/5 text-sm font-extrabold tracking-tight">
+                  R4
+                </div>
+                <div className="leading-tight">
+                  <p className="text-base font-semibold">Room4Rent Indore</p>
+                  <p className="text-xs text-white/60">
+                    Verified rentals across Indore
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-4 text-sm leading-relaxed text-white/65">
+                Find rooms, PGs, flats, and hostels with a clean search
+                experience and trusted listings.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                {socials.map((s) => (
+                  <SocialButton
+                    key={s.label}
+                    href={s.href}
+                    label={s.label}
+                    Icon={s.Icon}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Quick links */}
+            <div className="space-y-4">
+              <FooterTitle>Quick links</FooterTitle>
+              <ul className="space-y-3">
+                {quickLinks.map((l) => (
+                  <li key={l.label}>
+                    <FooterLink to={l.to}>{l.label}</FooterLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Support */}
+            <div className="space-y-4">
+              <FooterTitle>Support</FooterTitle>
+              <ul className="space-y-3">
+                {supportLinks.map((l) => (
+                  <li key={l.label}>
+                    <FooterLink to={l.to}>{l.label}</FooterLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Contact */}
+            <div className="space-y-4">
+              <FooterTitle>Contact</FooterTitle>
+
+              <div className="space-y-4">
+                <ContactRow Icon={MapPin}>
+                  <p className="font-medium text-white/85">Indore, MP</p>
+                  <p className="text-white/55">
+                    Local support for tenants and owners
+                  </p>
+                </ContactRow>
+
+                <ContactRow Icon={Mail}>
+                  <a
+                    href="mailto:info@room4rentindore.com"
+                    className="text-white/70 transition-colors hover:text-white"
+                  >
+                    info@room4rentindore.com
+                  </a>
+                </ContactRow>
+
+                <ContactRow Icon={Phone}>
+                  <span className="text-white/55">
+                    Phone support coming soon
+                  </span>
+                </ContactRow>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="border-t border-white/10 px-6 py-6 sm:px-8 lg:px-10">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-white/45">
+                © {year} Room4Rent Indore. All rights reserved.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-white/50">
+                <FooterLink to="/privacy">Privacy</FooterLink>
+                <FooterLink to="/terms">Terms</FooterLink>
+                <span className="hidden sm:inline">•</span>
+                <span>
+                  Made in <span className="text-white/70">Indore</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Small spacing below card */}
+        <div className="h-10" />
+      </div>
+    </motion.footer>
   );
 }
