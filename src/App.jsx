@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
@@ -62,10 +62,20 @@ function App() {
   return (
     <BrowserRouter>
       <Toaster richColors position="top-right" />
-      <div className="min-h-screen flex flex-col">
-        <Navbar />
-        <main className="flex-grow">
-          <Routes>
+      <PublicLayout />
+    </BrowserRouter>
+  );
+}
+
+function PublicLayout() {
+  const location = useLocation();
+  const isAuthRoute = location.pathname === "/login";
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {!isAuthRoute && <Navbar />}
+      <main className="flex-grow">
+        <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/properties" element={<Properties />} />
             <Route path="/properties/:id" element={<PropertyDetails />} />
@@ -106,11 +116,10 @@ function App() {
                 </RoleGuard>
               }
             />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
-    </BrowserRouter>
+        </Routes>
+      </main>
+      {!isAuthRoute && <Footer />}
+    </div>
   );
 }
 

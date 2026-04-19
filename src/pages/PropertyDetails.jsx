@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import API from "../services/api";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import {
@@ -322,11 +322,11 @@ export default function PropertyDetails() {
   const totalImages = images.length;
 
   return (
-    <div className="bg-paper min-h-screen">
-      <div className="max-w-[1440px] mx-auto px-6 pt-8 pb-24">
+    <div className="bg-paper min-h-screen pb-[88px] lg:pb-0">
+      <div className="max-w-[1440px] mx-auto px-5 md:px-6 pt-6 md:pt-8 pb-10 md:pb-24">
 
         {/* Breadcrumb */}
-        <div className="text-[13px] text-[color:var(--muted)] flex items-center gap-2 flex-wrap">
+        <div className="text-[12px] md:text-[13px] text-[color:var(--muted)] flex items-center gap-1.5 md:gap-2 flex-wrap">
           <Link to="/" className="hover:text-ink">Home</Link>
           <span>·</span>
           <Link to="/properties" className="hover:text-ink">Listings</Link>
@@ -338,8 +338,12 @@ export default function PropertyDetails() {
           <span className="text-ink">{property.title}</span>
         </div>
 
-        {/* Gallery — 3-col grid with 1 large + 4 small + "+N photos" */}
-        <div className="mt-5 grid gap-2 rounded-3xl overflow-hidden" style={{ gridTemplateColumns: "2fr 1fr 1fr", gridTemplateRows: "220px 220px" }}>
+        {/* Gallery — mobile: swipeable carousel · desktop: 3-col collage */}
+        <MobileGallery images={images} onOpen={setLightboxIdx} />
+        <div
+          className="mt-5 hidden md:grid gap-2 rounded-3xl overflow-hidden"
+          style={{ gridTemplateColumns: "2fr 1fr 1fr", gridTemplateRows: "220px 220px" }}
+        >
           <button onClick={() => setLightboxIdx(0)} style={{ gridRow: "span 2" }} className="overflow-hidden bg-ink/10">
             <img src={galleryImgs[0]} className="w-full h-full object-cover hover:scale-[1.02] transition" alt="" />
           </button>
@@ -374,10 +378,10 @@ export default function PropertyDetails() {
                   </span>
                   <span>· Listed {daysAgo(property.createdAt)}</span>
                 </div>
-                <h1 className="font-display text-[40px] md:text-[48px] leading-[1] mt-3 tracking-[-0.02em]">
+                <h1 className="font-display text-[32px] md:text-[48px] leading-[1.05] md:leading-[1] mt-3 tracking-[-0.02em]">
                   {property.title}
                 </h1>
-                <div className="text-[15px] text-[color:var(--muted)] mt-1 flex items-center gap-1.5">
+                <div className="text-[13px] md:text-[15px] text-[color:var(--muted)] mt-1 flex items-center gap-1.5 flex-wrap">
                   {locality}{locality ? ", " : ""}{city} ·
                   <span className="inline-flex items-center gap-1 text-accent">
                     <Star className="w-3.5 h-3.5 fill-current" /> 4.9 (42 reviews)
@@ -669,6 +673,30 @@ export default function PropertyDetails() {
         </div>
       </div>
 
+      {/* Sticky mobile CTA bar */}
+      {!isOwner && (
+        <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 bg-card/95 backdrop-blur border-t border-rule px-5 py-3 flex items-center gap-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.1)]">
+          <div className="flex-1 min-w-0">
+            <div className="font-display text-[22px] leading-none">{fmtINR(property.price)}</div>
+            <div className="text-[11px] text-[color:var(--muted)] mt-0.5">
+              {property.deposit != null ? `+ ${fmtINR(property.deposit)} deposit` : "per month"}
+            </div>
+          </div>
+          <button
+            onClick={handleContactOwner}
+            className="inline-flex items-center justify-center px-4 py-2.5 rounded-full bg-card border border-rule text-ink text-[13px] font-medium"
+          >
+            Message
+          </button>
+          <button
+            onClick={openVisitModal}
+            className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-ink text-paper text-[13px] font-medium"
+          >
+            Book visit
+          </button>
+        </div>
+      )}
+
       {/* Lightbox */}
       {lightboxIdx !== null && (
         <div className="fixed inset-0 z-50 bg-ink/90 flex items-center justify-center p-6" onClick={() => setLightboxIdx(null)}>
@@ -805,6 +833,44 @@ function Fact({ icon, big, sub, borderLeft }) {
       <div className="text-accent mb-1.5">{icon}</div>
       <div className="font-semibold text-[16px]">{big}</div>
       <div className="text-[12px] text-[color:var(--muted)] mt-0.5">{sub}</div>
+    </div>
+  );
+}
+
+function MobileGallery({ images, onOpen }) {
+  const [idx, setIdx] = useState(0);
+  const scrollerRef = useRef(null);
+
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    if (i !== idx) setIdx(i);
+  };
+
+  return (
+    <div className="md:hidden mt-4 relative rounded-3xl overflow-hidden bg-ink/10">
+      <div
+        ref={scrollerRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto scrollbar-hide snap-x snap-mandatory"
+      >
+        {images.map((src, i) => (
+          <button
+            key={i}
+            onClick={() => onOpen(i)}
+            className="flex-shrink-0 w-full snap-center"
+            style={{ scrollSnapAlign: "center" }}
+          >
+            <div className="aspect-[4/3]">
+              <img src={src} alt="" className="w-full h-full object-cover" />
+            </div>
+          </button>
+        ))}
+      </div>
+      <span className="absolute bottom-3 right-3 inline-flex items-center px-2.5 py-1 rounded-full bg-ink/70 backdrop-blur text-paper text-[12px] font-medium">
+        {idx + 1} / {images.length}
+      </span>
     </div>
   );
 }
