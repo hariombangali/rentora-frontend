@@ -254,24 +254,30 @@ export default function Inbox() {
   const showListMobile = !selectedConversation;
 
   return (
-    <div className="flex h-[100dvh] bg-gradient-to-b from-gray-50 to-gray-100">
-      {/* List pane */}
+    <div className="flex h-[100dvh] bg-paper">
+
+      {/* ── Left sidebar: conversation list ── */}
       <aside
         className={`${
           showListMobile ? "flex" : "hidden"
-        } md:flex md:w-1/3 lg:w-1/4 w-full bg-white border-r border-gray-200 flex-col`}
+        } md:flex flex-col bg-card border-r border-rule`}
+        style={{ width: "280px", minWidth: "280px" }}
       >
-        <div className="sticky top-0 z-10 bg-white/80 backdrop-blur border-b px-4 py-3">
-          <h2 className="font-semibold text-lg tracking-tight">Inbox</h2>
-          <div className="mt-3 relative">
+        {/* Sidebar header */}
+        <div className="px-5 pt-6 pb-4 border-b border-rule">
+          <h2 className="font-display text-2xl text-ink tracking-tight">Inbox</h2>
+          <p className="font-eyebrow text-muted mt-0.5">Messages</p>
+
+          {/* Search */}
+          <div className="relative mt-4">
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
-              placeholder="Search name, property, message…"
+              className="input-warm pl-9 py-2 text-sm"
+              placeholder="Search conversations…"
             />
             <svg
-              className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"
+              className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -280,24 +286,32 @@ export default function Inbox() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth={2}
+                strokeWidth={1.75}
                 d="M21 21l-4.35-4.35M16.65 16.65A7.5 7.5 0 101.5 9.15a7.5 7.5 0 0015.15 7.5z"
               />
             </svg>
           </div>
         </div>
 
-        <div className="overflow-y-auto divide-y divide-gray-100">
+        {/* Conversation list */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide">
           {loadingConvs ? (
+            /* Skeleton rows */
             [...Array(6)].map((_, i) => (
-              <div key={i} className="p-4 animate-pulse">
-                <div className="h-4 w-24 bg-gray-200 rounded mb-2" />
-                <div className="h-3 w-40 bg-gray-100 rounded mb-2" />
-                <div className="h-2 w-32 bg-gray-100 rounded" />
+              <div key={i} className="flex items-start gap-3 px-4 py-4 border-b border-rule animate-pulse">
+                <div className="w-10 h-10 rounded-full bg-rule flex-shrink-0" />
+                <div className="flex-1 min-w-0 space-y-2 pt-0.5">
+                  <div className="h-3.5 w-28 bg-rule rounded-full" />
+                  <div className="h-2.5 w-20 bg-rule/70 rounded-full" />
+                  <div className="h-2.5 w-36 bg-rule/50 rounded-full" />
+                </div>
               </div>
             ))
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">No conversations</div>
+            <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+              <span className="font-display text-3xl text-rule select-none">✦</span>
+              <p className="mt-3 text-sm text-muted">No conversations found</p>
+            </div>
           ) : (
             filtered.map((conv, idx) => {
               const active =
@@ -313,31 +327,56 @@ export default function Inbox() {
                 <button
                   key={`${conv.partner?._id}_${conv.property?._id || idx}`}
                   onClick={() => setSelectedConversation(conv)}
-                  className={`w-full text-left p-4 transition relative ${
-                    active ? "bg-blue-50/70" : "hover:bg-gray-50"
-                  } focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40`}
+                  className={`
+                    w-full text-left px-4 py-4 flex items-start gap-3 transition-colors
+                    border-b border-rule focus:outline-none focus-visible:ring-2
+                    focus-visible:ring-accent/40
+                    ${active
+                      ? "bg-accent/10 border-l-2 border-l-accent pl-[14px]"
+                      : "hover:bg-paper border-l-2 border-l-transparent"
+                    }
+                  `}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className="relative">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white grid place-items-center font-semibold shadow-sm">
-                        {initials(name)}
-                      </div>
-                      {unread && (
-                        <span className="absolute -right-1 -top-1 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-                      )}
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full flex items-center justify-center
+                        text-sm font-semibold select-none
+                        ${active ? "bg-accent text-white" : "bg-accent/15 text-accent"}
+                      `}
+                    >
+                      {initials(name)}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-gray-900 truncate">{name}</p>
-                        {time && <span className="text-[11px] text-gray-400 ml-2">{time}</span>}
+                    {/* Unread dot */}
+                    {unread && (
+                      <span className="absolute -right-0.5 -top-0.5 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-card" />
+                    )}
+                  </div>
+
+                  {/* Text content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={`text-sm truncate ${unread ? "font-semibold text-ink" : "font-medium text-ink"}`}>
+                        {name}
+                      </p>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {time && (
+                          <span className="font-eyebrow text-[10px] text-muted">{time}</span>
+                        )}
+                        {unread && (
+                          <span className="bg-accent text-white text-xs rounded-full px-1.5 py-px font-semibold leading-none">
+                            {conv.unreadCount}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs text-gray-500 italic truncate">
-                        {conv.property?.title || "Property"}
-                      </p>
-                      <p className={`text-sm truncate mt-0.5 ${unread ? "text-gray-900 font-medium" : "text-gray-600"}`}>
-                        {conv.lastMessage || "Tap to view messages"}
-                      </p>
                     </div>
+                    <p className="text-xs text-muted truncate mt-0.5 italic">
+                      {conv.property?.title || "Property"}
+                    </p>
+                    <p className={`text-sm truncate mt-0.5 ${unread ? "text-ink" : "text-muted"}`}>
+                      {conv.lastMessage || "Tap to view messages"}
+                    </p>
                   </div>
                 </button>
               );
@@ -346,53 +385,68 @@ export default function Inbox() {
         </div>
       </aside>
 
-      {/* Chat pane */}
+      {/* ── Center: chat area ── */}
       <section
         className={`${
           showListMobile ? "hidden" : "flex"
-        } md:flex flex-1 flex-col min-w-0`}
+        } md:flex flex-1 flex-col min-w-0 bg-card`}
       >
         {selectedConversation ? (
           <>
-            {/* Header */}
-            <div className="sticky top-0 z-10 border-b bg-white/80 backdrop-blur px-4 py-3">
-              <div className="flex items-center gap-3">
-                <button
-                  className="md:hidden -ml-2 mr-1 px-2 py-1 rounded hover:bg-gray-100"
-                  onClick={() => setSelectedConversation(null)}
-                  aria-label="Back to conversations"
-                  type="button"
-                >
-                  ←
-                </button>
-                <div className="w-9 h-9 rounded-full bg-gray-200 grid place-items-center text-sm font-semibold">
-                  {initials(headerName)}
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{headerName}</p>
-                  <p className="text-xs text-gray-500 truncate">{headerProp}</p>
-                </div>
+            {/* Chat header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-rule bg-card sticky top-0 z-10">
+              {/* Mobile back button */}
+              <button
+                className="md:hidden -ml-1 mr-0.5 w-8 h-8 rounded-full flex items-center justify-center
+                  hover:bg-paper transition-colors text-muted hover:text-ink"
+                onClick={() => setSelectedConversation(null)}
+                aria-label="Back to conversations"
+                type="button"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+
+              {/* Partner avatar */}
+              <div className="w-9 h-9 rounded-full bg-accent/15 text-accent flex items-center justify-center
+                text-sm font-semibold flex-shrink-0 select-none">
+                {initials(headerName)}
+              </div>
+
+              {/* Names */}
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink text-sm truncate">{headerName}</p>
+                <p className="font-eyebrow text-muted truncate">{headerProp}</p>
               </div>
             </div>
 
-            {/* Messages */}
+            {/* Messages scroll area */}
             <div
               ref={listRef}
-              className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-50 via-white to-white"
+              className="flex-1 overflow-y-auto px-5 py-6 space-y-3 bg-paper/40 scrollbar-hide"
             >
               {loadingMsgs ? (
-                [...Array(8)].map((_, i) => (
+                /* Skeleton bubbles */
+                [...Array(7)].map((_, i) => (
                   <div
                     key={i}
-                    className={`flex gap-2 items-start ${i % 2 ? "justify-end" : "justify-start"} animate-pulse`}
+                    className={`flex items-end gap-2 animate-pulse ${i % 2 ? "justify-end" : "justify-start"}`}
                   >
-                    <div className="w-8 h-8 rounded-full bg-gray-200" />
-                    <div className="h-14 w-56 max-w-[70%] rounded-2xl bg-gray-200" />
+                    {!(i % 2) && <div className="w-7 h-7 rounded-full bg-rule flex-shrink-0" />}
+                    <div
+                      className={`h-12 rounded-2xl bg-rule ${i % 2 ? "w-48" : "w-56"}`}
+                      style={{ maxWidth: "65%" }}
+                    />
                   </div>
                 ))
               ) : messages.length === 0 ? (
-                <div className="h-full grid place-items-center text-gray-500">
-                  Say hello and start the conversation
+                <div className="h-full flex flex-col items-center justify-center gap-3 text-center select-none">
+                  <span className="font-display text-5xl text-rule">✦</span>
+                  <p className="font-display text-xl text-ink/60">
+                    Say hello and start the conversation
+                  </p>
+                  <p className="text-sm text-muted">Your messages will appear here</p>
                 </div>
               ) : (
                 messages.map((msg) => {
@@ -404,26 +458,37 @@ export default function Inbox() {
                       key={msg._id}
                       className={`flex w-full items-end gap-2 ${mine ? "justify-end" : "justify-start"}`}
                     >
+                      {/* Partner avatar on received messages */}
                       {!mine && (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 grid place-items-center text-[11px] font-medium">
+                        <div className="w-7 h-7 rounded-full bg-accent/15 text-accent flex items-center
+                          justify-center text-[10px] font-semibold flex-shrink-0 select-none mb-0.5">
                           {initials(headerName)}
                         </div>
                       )}
+
+                      {/* Bubble */}
                       <div
-                        className={`max-w-[85%] sm:max-w-[75%] md:max-w-[65%] rounded-2xl px-4 py-2.5 shadow-sm ${
-                          mine
-                            ? "bg-blue-600 text-white rounded-br-md"
-                            : "bg-gray-100 text-gray-900 rounded-bl-md"
-                        }`}
+                        className={`
+                          max-w-[85%] sm:max-w-[72%] md:max-w-[60%] px-4 py-2.5
+                          ${mine
+                            ? "bg-accent text-white rounded-2xl rounded-tr-sm shadow-sm"
+                            : "bg-paper border border-rule text-ink rounded-2xl rounded-tl-sm"
+                          }
+                        `}
                       >
-                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                        <div className={`mt-1.5 text-[11px] ${mine ? "text-white/80" : "text-gray-500"}`}>
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          {msg.content}
+                        </p>
+                        <p className={`mt-1 text-[10px] ${mine ? "text-white/70" : "text-muted"} text-right`}>
                           {formatTime(msg.createdAt)}
-                        </div>
+                        </p>
                       </div>
+
+                      {/* Own avatar on sent messages */}
                       {mine && (
-                        <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 grid place-items-center text-[11px] font-semibold">
-                          {initials("You")}
+                        <div className="w-7 h-7 rounded-full bg-accent/20 text-accent flex items-center
+                          justify-center text-[10px] font-semibold flex-shrink-0 select-none mb-0.5">
+                          {initials(user?.name || "Me")}
                         </div>
                       )}
                     </div>
@@ -434,14 +499,15 @@ export default function Inbox() {
               {/* Typing indicator */}
               {partnerTyping && (
                 <div className="flex items-end gap-2 justify-start">
-                  <div className="w-8 h-8 rounded-full bg-gray-200 grid place-items-center text-[11px] font-medium">
+                  <div className="w-7 h-7 rounded-full bg-accent/15 text-accent flex items-center
+                    justify-center text-[10px] font-semibold flex-shrink-0 select-none mb-0.5">
                     {initials(headerName)}
                   </div>
-                  <div className="bg-gray-100 rounded-2xl rounded-bl-md px-4 py-3 flex gap-1">
+                  <div className="bg-paper border border-rule rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1">
                     {[0, 150, 300].map((delay) => (
                       <span
                         key={delay}
-                        className="w-2 h-2 rounded-full bg-gray-400 animate-bounce"
+                        className="w-2 h-2 rounded-full bg-muted animate-bounce"
                         style={{ animationDelay: `${delay}ms` }}
                       />
                     ))}
@@ -452,16 +518,16 @@ export default function Inbox() {
               <div ref={bottomRef} />
             </div>
 
-            {/* Composer */}
+            {/* Message composer */}
             <div
-              className="border-t bg-white/80 backdrop-blur px-3 py-3 sticky bottom-0"
+              className="bg-card border-t border-rule px-3 py-3 sticky bottom-0"
               style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
             >
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   placeholder="Type a message…"
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition"
+                  className="input-warm flex-1 rounded-full py-2.5 text-sm"
                   value={newMessage}
                   onChange={handleTypingInput}
                   onKeyDown={onKeyDown}
@@ -470,20 +536,41 @@ export default function Inbox() {
                 <button
                   onClick={handleSend}
                   disabled={sending || !newMessage.trim()}
-                  className="bg-blue-600 disabled:bg-blue-300 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition shadow-sm"
+                  className="btn-accent rounded-full w-10 h-10 p-0 flex-shrink-0 disabled:opacity-40
+                    disabled:cursor-not-allowed disabled:active:scale-100"
                   type="button"
+                  aria-label="Send message"
                 >
-                  {sending ? "Sending…" : "Send"}
+                  {sending ? (
+                    /* Spinner */
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                  ) : (
+                    /* Send arrow */
+                    <svg className="w-4 h-4 translate-x-px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2}
+                        d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                  )}
                 </button>
               </div>
-              <p className="mt-1 text-[11px] text-gray-500">
-                Press Enter to send • Shift+Enter for newline
+              <p className="mt-1.5 text-center font-eyebrow text-muted" style={{ fontSize: "10px" }}>
+                Enter to send &nbsp;·&nbsp; Shift+Enter for newline
               </p>
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center flex-1 text-gray-500">
-            Select a conversation to start chatting
+          /* Empty state — no conversation selected */
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center select-none">
+            <span className="font-display text-6xl text-rule leading-none">✦</span>
+            <h3 className="font-display text-2xl text-ink/70 leading-snug">
+              Select a conversation<br />to start chatting
+            </h3>
+            <p className="text-sm text-muted max-w-xs">
+              Choose someone from the list on the left and your messages will appear here.
+            </p>
           </div>
         )}
       </section>

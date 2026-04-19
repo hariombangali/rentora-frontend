@@ -55,6 +55,51 @@ const NOTICE_OPTIONS = ["15 Days", "1 Month", "2 Months"];
 const AMENITIES_LIST = ["Wi-Fi", "Parking", "Balcony", "Water Supply", "AC", "Power Backup", "Lift"];
 const PG_AMENITIES_LIST = ["Meal", "Laundry", "Housekeeping", "Common TV", "CCTV", "RO Water", "Refrigerator", "Geyser"];
 
+/* ── Reusable chip / pill toggle button ── */
+function Chip({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all border ${
+        active
+          ? "bg-accent text-white border-accent shadow-sm"
+          : "bg-paper text-ink border-rule hover:border-accent hover:text-accent"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ── Field wrapper with eyebrow label and optional error ── */
+function Field({ label, required, error, children, className = "" }) {
+  return (
+    <div className={className}>
+      {label && (
+        <label className="block font-eyebrow text-muted mb-1.5">
+          {label}
+          {required && <span className="text-accent ml-0.5">*</span>}
+        </label>
+      )}
+      {children}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+/* ── Card section wrapper ── */
+function Section({ eyebrow, children }) {
+  return (
+    <div className="bg-card rounded-2xl shadow-card border border-rule p-6 space-y-6">
+      {eyebrow && (
+        <p className="font-eyebrow text-muted border-b border-rule pb-3">{eyebrow}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
 export default function PostProperty() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -336,349 +381,542 @@ export default function PostProperty() {
     })();
   }, [isEdit, id]);
 
-
-  return (
-    <div className="max-w-4xl mx-auto mt-8 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-800">
-          <span className="text-blue-600">{isEdit ? "Edit" : "List"}</span> Your Property
-        </h2>
-       <p className="text-gray-600 mt-2">
-          {isEdit ? "Update your listing details" : "Reach thousands of potential tenants in just a few steps"}
-        </p>
-      </div>
-
-      {/* Stepper */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between relative">
-          {STEPS.map((label, idx) => (
-            <div key={label} className="flex flex-col items-center z-10">
-              <div
-                className={`w-10 h-10 flex items-center justify-center rounded-full border-2 font-medium transition-all duration-300
-                  ${step === idx + 1 ? "bg-blue-600 text-white border-blue-600 transform scale-110" :
-                    step > idx + 1 ? "bg-green-500 text-white border-green-500" :
-                      "bg-white text-gray-400 border-gray-300"}`}
-              >
-                {idx + 1}
-              </div>
-              <span className={`mt-2 text-xs font-medium text-center max-w-20 ${step >= idx + 1 ? "text-gray-800" : "text-gray-400"}`}>{label}</span>
-            </div>
-          ))}
-          <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200 -z-1">
-            <div className="h-1 bg-gradient-to-r from-blue-600 to-green-500 transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-          </div>
+  /* ── Loading skeleton ── */
+  if (loadingPrefill) {
+    return (
+      <div className="min-h-screen bg-paper flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 rounded-full border-2 border-accent border-t-transparent animate-spin mx-auto" />
+          <p className="font-eyebrow text-muted">Loading property data…</p>
         </div>
       </div>
+    );
+  }
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Step 1: Property Details */}
-        {STEPS[step - 1] === "Property Details" && (
-          <div className="space-y-8 animate-fadeIn">
-            <div className="bg-gray-50 p-6 rounded-xl">
-              <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Property Information</h3>
-              <div className="grid grid-cols-1 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Listing Title*</label>
-                  <input name="title" value={formData.title} onChange={handleChange} placeholder="e.g., Spacious 2BHK in Vijay Nagar" className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${formErrors.title ? "border-red-500" : "border-gray-300"}`} />
-                  {formErrors.title && <p className="mt-1 text-sm text-red-600">{formErrors.title}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description*</label>
-                  <textarea rows={3} name="description" value={formData.description} onChange={handleChange} placeholder="Describe the property, nearby amenities, rules, etc." className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition ${formErrors.description ? "border-red-500" : "border-gray-300"}`} />
-                  {formErrors.description && <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Available For</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["Boys", "Girls", "Any"].map(opt => (<button type="button" key={opt} onClick={() => setField("availableFor", opt)} className={`px-4 py-2 rounded-full text-sm font-medium transition ${formData.availableFor === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt}</button>))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Tenants</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["Students", "Working Professionals", "Any"].map(opt => (<button type="button" key={opt} onClick={() => setField("preferredTenants", opt)} className={`px-4 py-2 rounded-full text-sm font-medium transition ${formData.preferredTenants === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt}</button>))}
-                  </div>
-                </div>
-              </div>
+  return (
+    <div className="min-h-screen bg-paper">
+      <div className="max-w-3xl mx-auto px-4 py-10 sm:px-6 lg:px-8">
+
+        {/* ── Page header ── */}
+        <div className="mb-10 text-center">
+          <p className="font-eyebrow text-muted mb-2">{isEdit ? "Edit listing" : "New listing"}</p>
+          <h1 className="font-display text-4xl text-ink leading-tight">
+            {isEdit ? "Update your property" : "List your property"}
+          </h1>
+          <p className="mt-2 text-muted text-sm">
+            {isEdit
+              ? "Make changes to your existing listing details."
+              : "Reach thousands of tenants in just a few steps."}
+          </p>
+        </div>
+
+        {/* ── Step indicator ── */}
+        <div className="mb-10">
+          <div className="relative flex items-start justify-between">
+            {/* Connecting line behind circles */}
+            <div className="absolute top-4 left-0 right-0 h-px bg-rule -z-0" aria-hidden="true">
+              <div
+                className="h-px bg-accent transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              />
             </div>
 
-            <div className="bg-gray-50 p-6 rounded-xl">
-              <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Room Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Occupancy Type</label>
-                  <div className="flex flex-wrap gap-2">
-                    {["Single", "Shared", "Both"].map(opt => (<button type="button" key={opt} onClick={() => setField("occupancyType", opt)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${formData.occupancyType === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt}</button>))}
+            {STEPS.map((label, idx) => {
+              const num = idx + 1;
+              const isActive = step === num;
+              const isDone = step > num;
+              return (
+                <div key={label} className="flex flex-col items-center gap-1.5 z-10">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold border-2 transition-all duration-300 ${
+                      isActive
+                        ? "bg-accent text-white border-accent scale-110"
+                        : isDone
+                        ? "bg-sage-soft text-sage border-sage"
+                        : "bg-rule text-muted border-rule"
+                    }`}
+                  >
+                    {isDone ? (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      num
+                    )}
                   </div>
+                  <span
+                    className={`font-eyebrow text-center leading-tight max-w-[72px] ${
+                      isActive ? "text-ink" : isDone ? "text-sage" : "text-muted"
+                    }`}
+                    style={{ fontSize: "0.6rem" }}
+                  >
+                    {label}
+                  </span>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Sharing per Room</label>
-                  <div className="flex flex-wrap gap-2">
-                    {SHARING_OPTIONS.map(opt => (<button type="button" key={opt} onClick={() => setField("sharingCount", opt)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${formData.sharingCount === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt} {opt !== "5+" ? "People" : ""}</button>))}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Form ── */}
+        <form onSubmit={handleSubmit} noValidate className="space-y-6">
+
+          {/* ════════════════════ STEP 1 — Property Details ════════════════════ */}
+          {STEPS[step - 1] === "Property Details" && (
+            <div className="space-y-6">
+
+              {/* Basic info */}
+              <Section eyebrow="Property information">
+                <Field label="Listing title" required error={formErrors.title}>
+                  <input
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    placeholder="e.g., Spacious 2BHK in Vijay Nagar"
+                    className={`input-warm ${formErrors.title ? "border-red-400 focus:border-red-400 focus:ring-red-200" : ""}`}
+                  />
+                </Field>
+
+                <Field label="Description" required error={formErrors.description}>
+                  <textarea
+                    rows={3}
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    placeholder="Describe the property, nearby amenities, rules, etc."
+                    className={`input-warm resize-none ${formErrors.description ? "border-red-400 focus:border-red-400 focus:ring-red-200" : ""}`}
+                  />
+                </Field>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <Field label="Available for">
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {["Boys", "Girls", "Any"].map((opt) => (
+                        <Chip key={opt} active={formData.availableFor === opt} onClick={() => setField("availableFor", opt)}>
+                          {opt}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+
+                  <Field label="Preferred tenants">
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {["Students", "Working Professionals", "Any"].map((opt) => (
+                        <Chip key={opt} active={formData.preferredTenants === opt} onClick={() => setField("preferredTenants", opt)}>
+                          {opt}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+                </div>
+              </Section>
+
+              {/* Room details */}
+              <Section eyebrow="Room details">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <Field label="Occupancy type">
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {["Single", "Shared", "Both"].map((opt) => (
+                        <Chip key={opt} active={formData.occupancyType === opt} onClick={() => setField("occupancyType", opt)}>
+                          {opt}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+
+                  <Field label="Sharing per room">
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {SHARING_OPTIONS.map((opt) => (
+                        <Chip key={opt} active={formData.sharingCount === opt} onClick={() => setField("sharingCount", opt)}>
+                          {opt !== "5+" ? `${opt}` : "5+"}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+
+                  <Field label="Bedrooms">
+                    <input
+                      type="number"
+                      min={1}
+                      max={10}
+                      name="bedrooms"
+                      value={formData.bedrooms}
+                      onChange={handleChange}
+                      className="input-warm"
+                    />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <Field label="Attached bathroom">
+                    <div className="flex gap-2 pt-0.5">
+                      {["Yes", "No"].map((opt) => (
+                        <Chip key={opt} active={formData.attachedBathroom === opt} onClick={() => setField("attachedBathroom", opt)}>
+                          {opt}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+
+                  <Field label="Attached balcony">
+                    <div className="flex gap-2 pt-0.5">
+                      {["Yes", "No"].map((opt) => (
+                        <Chip key={opt} active={formData.attachedBalcony === opt} onClick={() => setField("attachedBalcony", opt)}>
+                          {opt}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+
+                  <Field label="Furnishing">
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {FURNISHING_OPTIONS.map((opt) => (
+                        <Chip
+                          key={opt}
+                          active={formData.roomFurnishing === opt}
+                          onClick={() => setFormData((f) => ({ ...f, roomFurnishing: opt }))}
+                        >
+                          {opt}
+                        </Chip>
+                      ))}
+                    </div>
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <Field label="Total floors">
+                    <input
+                      type="number"
+                      min={1}
+                      name="totalFloors"
+                      value={formData.totalFloors}
+                      onChange={handleChange}
+                      className="input-warm"
+                    />
+                  </Field>
+
+                  <Field label="Property floor">
+                    <input
+                      type="number"
+                      min={0}
+                      name="propertyOnFloor"
+                      value={formData.propertyOnFloor}
+                      onChange={handleChange}
+                      className="input-warm"
+                    />
+                  </Field>
+
+                  <Field label="Age of property">
+                    <select
+                      name="ageOfProperty"
+                      value={formData.ageOfProperty}
+                      onChange={handleChange}
+                      className="input-warm"
+                    >
+                      <option value="">Select</option>
+                      {AGE_OPTIONS.map((opt) => (
+                        <option key={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                {/* Common area facilities */}
+                <Field label="Common area facilities">
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {AMENITIES_LIST.map((am) => (
+                      <Chip
+                        key={am}
+                        active={formData.commonAreaFacilities.includes(am)}
+                        onClick={() => handleChipArrayToggle("commonAreaFacilities", am)}
+                      >
+                        {am}
+                      </Chip>
+                    ))}
                   </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="facilitiesInput"
+                      value={formData.facilitiesInput}
+                      onChange={(e) => setField("facilitiesInput", e.target.value)}
+                      placeholder="Add custom facility and press Enter"
+                      onKeyDown={(e) => handleCustomAmenity(e, "commonAreaFacilities", "facilitiesInput")}
+                      className="input-warm pr-20"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 font-eyebrow text-muted pointer-events-none">
+                      Enter
+                    </span>
+                  </div>
+                  {formData.commonAreaFacilities.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {formData.commonAreaFacilities.map((fac, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1.5 bg-accent-soft text-accent px-3 py-1 rounded-full text-xs font-medium"
+                        >
+                          {fac}
+                          <button
+                            type="button"
+                            onClick={() => handleChipArrayToggle("commonAreaFacilities", fac)}
+                            className="hover:text-accent-hover leading-none"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+              </Section>
+
+              {/* Location */}
+              <Section eyebrow="Location details">
+                <Field label="Available from" required error={formErrors.availableFrom}>
+                  <input
+                    type="date"
+                    name="availableFrom"
+                    value={formData.availableFrom}
+                    onChange={handleChange}
+                    min={minDate}
+                    className={`input-warm ${formErrors.availableFrom ? "border-red-400" : ""}`}
+                  />
+                </Field>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                  <Field label="City" required error={formErrors.city}>
+                    <input
+                      name="city"
+                      value={formData.city}
+                      onChange={handleChange}
+                      placeholder="Indore"
+                      className={`input-warm ${formErrors.city ? "border-red-400" : ""}`}
+                    />
+                  </Field>
+
+                  <Field label="Locality" required error={formErrors.locality}>
+                    <input
+                      name="locality"
+                      value={formData.locality}
+                      onChange={handleChange}
+                      placeholder="Vijay Nagar"
+                      className={`input-warm ${formErrors.locality ? "border-red-400" : ""}`}
+                    />
+                  </Field>
+
+                  <Field label="Pincode" required error={formErrors.pincode}>
+                    <input
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={handleChange}
+                      maxLength={6}
+                      placeholder="452001"
+                      className={`input-warm ${formErrors.pincode ? "border-red-400" : ""}`}
+                    />
+                  </Field>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Bedrooms*</label>
-                  <input type="number" min={1} max={10} name="bedrooms" value={formData.bedrooms} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                </div>
+
+                <Field label="Full address" required error={formErrors.address}>
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleChange}
+                    rows={2}
+                    placeholder="House no., street, landmark…"
+                    className={`input-warm resize-none ${formErrors.address ? "border-red-400" : ""}`}
+                  />
+                </Field>
+              </Section>
+            </div>
+          )}
+
+          {/* ════════════════════ STEP 2 — Pricing ════════════════════ */}
+          {STEPS[step - 1] === "Pricing" && (
+            <Section eyebrow="Pricing & terms">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Field label="Monthly rent (₹)" required error={formErrors.price}>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted select-none">₹</span>
+                    <input
+                      type="number"
+                      name="price"
+                      value={formData.price}
+                      onChange={handleChange}
+                      placeholder="0"
+                      className={`input-warm pl-8 ${formErrors.price ? "border-red-400" : ""}`}
+                    />
+                  </div>
+                </Field>
+
+                <Field label="Security deposit (₹)" error={formErrors.deposit}>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted select-none">₹</span>
+                    <input
+                      type="number"
+                      name="deposit"
+                      value={formData.deposit}
+                      onChange={handleChange}
+                      placeholder="0"
+                      className="input-warm pl-8"
+                    />
+                  </div>
+                </Field>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Attached Bathroom</label>
-                  <div className="flex gap-2">
-                    {["Yes", "No"].map(opt => (<button type="button" key={opt} onClick={() => setField("attachedBathroom", opt)} className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${formData.attachedBathroom === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt}</button>))}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <Field label="Maintenance (₹)">
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted select-none">₹</span>
+                    <input
+                      type="number"
+                      name="maintenance"
+                      value={formData.maintenance}
+                      onChange={handleChange}
+                      placeholder="0"
+                      className="input-warm pl-8"
+                    />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Attached Balcony</label>
-                  <div className="flex gap-2">
-                    {["Yes", "No"].map(opt => (<button type="button" key={opt} onClick={() => setField("attachedBalcony", opt)} className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${formData.attachedBalcony === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt}</button>))}
+                </Field>
+
+                <Field label="Frequency">
+                  <select
+                    name="maintenanceFreq"
+                    value={formData.maintenanceFreq}
+                    onChange={handleChange}
+                    className="input-warm"
+                  >
+                    {MAINTENANCE_FREQS.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Early leaving charges (₹)">
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted select-none">₹</span>
+                    <input
+                      type="number"
+                      name="earlyLeavingCharges"
+                      value={formData.earlyLeavingCharges}
+                      onChange={handleChange}
+                      placeholder="0"
+                      className="input-warm pl-8"
+                    />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Furnishing</label>
-                  <div className="flex flex-wrap gap-2">
-                    {FURNISHING_OPTIONS.map(opt => (<button type="button" key={opt} onClick={() => setFormData(f => ({ ...f, roomFurnishing: opt }))} className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${formData.roomFurnishing === opt ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{opt}</button>))}
-                  </div>
-                </div>
+                </Field>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Total Floors</label>
-                  <input type="number" min={1} name="totalFloors" value={formData.totalFloors} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Property Floor</label>
-                  <input type="number" min={1} name="propertyOnFloor" value={formData.propertyOnFloor} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Age of Property</label>
-                  <select name="ageOfProperty" value={formData.ageOfProperty} onChange={handleChange} className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"><option value="">Select</option>{AGE_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}</select>
-                </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Field label="Min. contract duration">
+                  <select
+                    name="minContractDuration"
+                    value={formData.minContractDuration}
+                    onChange={handleChange}
+                    className="input-warm"
+                  >
+                    {CONTRACT_OPTIONS.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Notice period">
+                  <select
+                    name="noticePeriod"
+                    value={formData.noticePeriod}
+                    onChange={handleChange}
+                    className="input-warm"
+                  >
+                    {NOTICE_OPTIONS.map((opt) => (
+                      <option key={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </Field>
               </div>
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Common Area Facilities</label>
+            </Section>
+          )}
+
+          {/* ════════════════════ STEP 3 — Amenities ════════════════════ */}
+          {STEPS[step - 1] === "Amenities" && (
+            <Section eyebrow="Amenities & facilities">
+              <Field label="PG / room amenities">
                 <div className="flex flex-wrap gap-2 mb-3">
-                  {AMENITIES_LIST.map(am => (<button type="button" key={am} onClick={() => handleChipArrayToggle("commonAreaFacilities", am)} className={`px-3 py-1 rounded-full text-xs font-medium transition ${formData.commonAreaFacilities.includes(am) ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>{am}</button>))}
+                  {PG_AMENITIES_LIST.map((am) => (
+                    <Chip
+                      key={am}
+                      active={formData.pgAmenities.includes(am)}
+                      onClick={() => handleChipArrayToggle("pgAmenities", am)}
+                    >
+                      {am}
+                    </Chip>
+                  ))}
                 </div>
                 <div className="relative">
-                  <input type="text" name="facilitiesInput" value={formData.facilitiesInput} onChange={(e) => setField('facilitiesInput', e.target.value)} placeholder="Type facility and press Enter" onKeyDown={(e) => handleCustomAmenity(e, 'commonAreaFacilities', 'facilitiesInput')} className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                  <span className="absolute right-3 top-2 text-xs text-gray-500">Press Enter</span>
+                  <input
+                    type="text"
+                    name="pgAmenitiesInput"
+                    value={formData.pgAmenitiesInput}
+                    onChange={(e) => setField("pgAmenitiesInput", e.target.value)}
+                    placeholder="Add custom amenity and press Enter"
+                    onKeyDown={(e) => handleCustomAmenity(e, "pgAmenities", "pgAmenitiesInput")}
+                    className="input-warm pr-20"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-eyebrow text-muted pointer-events-none">
+                    Enter
+                  </span>
                 </div>
-                {formData.commonAreaFacilities.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {formData.commonAreaFacilities.map((fac, idx) => (<span key={idx} className="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs">{fac}<button type="button" onClick={() => handleChipArrayToggle("commonAreaFacilities", fac)} className="ml-2 text-blue-600 hover:text-blue-800">×</button></span>))}
-                  </div>
-                )}
-              </div>
-            </div>
+              </Field>
 
-            <div className="bg-gray-50 p-6 rounded-xl">
-              <h3 className="text-xl font-bold mb-4 text-gray-800 border-b pb-2">Location Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Available From*</label>
-                  <input type="date" name="availableFrom" value={formData.availableFrom} onChange={handleChange} min={minDate} className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.availableFrom ? "border-red-500" : "border-gray-300"}`} />
-                  {formErrors.availableFrom && <p className="mt-1 text-sm text-red-600">{formErrors.availableFrom}</p>}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City*</label>
-                  <input name="city" value={formData.city} onChange={handleChange} className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.city ? "border-red-500" : "border-gray-300"}`} />
-                  {formErrors.city && <p className="mt-1 text-sm text-red-600">{formErrors.city}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Locality*</label>
-                  <input name="locality" value={formData.locality} onChange={handleChange} className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.locality ? "border-red-500" : "border-gray-300"}`} />
-                  {formErrors.locality && <p className="mt-1 text-sm text-red-600">{formErrors.locality}</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Pincode*</label>
-                  <input name="pincode" value={formData.pincode} onChange={handleChange} maxLength={6} className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.pincode ? "border-red-500" : "border-gray-300"}`} />
-                  {formErrors.pincode && <p className="mt-1 text-sm text-red-600">{formErrors.pincode}</p>}
-                </div>
-              </div>
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Address*</label>
-                <textarea name="address" value={formData.address} onChange={handleChange} rows={2} className={`w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.address ? "border-red-500" : "border-gray-300"}`} />
-                {formErrors.address && <p className="mt-1 text-sm text-red-600">{formErrors.address}</p>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 2: Pricing */}
-        {STEPS[step - 1] === "Pricing" && (
-          <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
-            <h3 className="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Pricing & Terms</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Rent (₹)*</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">₹</span>
-                  <input type="number" name="price" value={formData.price} onChange={handleChange} className={`w-full pl-8 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.price ? "border-red-500" : "border-gray-300"}`} />
-                </div>
-                {formErrors.price && <p className="mt-1 text-sm text-red-600">{formErrors.price}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Security Deposit (₹)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">₹</span>
-                  <input type="number" name="deposit" value={formData.deposit} onChange={handleChange} className={`w-full pl-8 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.deposit ? "border-red-500" : "border-gray-300"}`} />
-                </div>
-                {formErrors.deposit && <p className="mt-1 text-sm text-red-600">{formErrors.deposit}</p>}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Maintenance (₹)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">₹</span>
-                  <input type="number" name="maintenance" value={formData.maintenance} onChange={handleChange} className="w-full pl-8 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Frequency</label>
-                <select name="maintenanceFreq" value={formData.maintenanceFreq} onChange={handleChange} className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300">{MAINTENANCE_FREQS.map(opt => <option key={opt}>{opt}</option>)}</select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Early Leaving Charges (₹)</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">₹</span>
-                  <input type="number" name="earlyLeavingCharges" value={formData.earlyLeavingCharges} onChange={handleChange} className="w-full pl-8 rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300" />
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Contract Duration</label>
-                <select name="minContractDuration" value={formData.minContractDuration} onChange={handleChange} className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300">{CONTRACT_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}</select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Notice Period</label>
-                <select name="noticePeriod" value={formData.noticePeriod} onChange={handleChange} className="w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300">{NOTICE_OPTIONS.map(opt => <option key={opt}>{opt}</option>)}</select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Amenities */}
-        {STEPS[step - 1] === "Amenities" && (
-          <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
-            <h3 className="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Amenities & Facilities</h3>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Select PG Amenities</label>
-              <div className="flex flex-wrap gap-3 mb-4">
-                {PG_AMENITIES_LIST.map(am => (<button type="button" key={am} onClick={() => handleChipArrayToggle("pgAmenities", am)} className={`px-4 py-2 rounded-lg border font-medium transition ${formData.pgAmenities.includes(am) ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"}`}>{am}</button>))}
-              </div>
-              <div className="relative">
-                <input type="text" name="pgAmenitiesInput" value={formData.pgAmenitiesInput} onChange={(e) => setField('pgAmenitiesInput', e.target.value)} placeholder="Type custom amenity and press Enter" onKeyDown={(e) => handleCustomAmenity(e, 'pgAmenities', 'pgAmenitiesInput')} className="w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300" />
-                <span className="absolute right-3 top-3.5 text-sm text-gray-500">Press Enter</span>
-              </div>
               {formData.pgAmenities.length > 0 && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Selected Amenities</label>
+                <div>
+                  <p className="font-eyebrow text-muted mb-2">Selected amenities</p>
                   <div className="flex flex-wrap gap-2">
-                    {formData.pgAmenities.map((am, idx) => (<span key={idx} className="inline-flex items-center bg-blue-100 text-blue-800 px-3 py-1 rounded-lg text-sm">{am}<button type="button" onClick={() => handleChipArrayToggle("pgAmenities", am)} className="ml-2 text-blue-600 hover:text-blue-800">×</button></span>))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Step 4: Photos */}
-      {STEPS[step - 1] === "Photos" && (
-          <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
-            <h3 className="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Upload Photos</h3>
-
-            {isEdit && existingImages.length > 0 && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Existing Photos</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {existingImages.map((name, idx) => {
-                    const base = API.defaults.baseURL.replace("/api", "");
-                    const url = `${base}/uploads/${name}`;
-                    return (
-                      <div key={`${name}-${idx}`} className="relative group">
-                        <img
-                          src={url}
-                          alt={`Existing ${idx + 1}`}
-                          className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                          loading="lazy"
-                        />
+                    {formData.pgAmenities.map((am, idx) => (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 bg-accent-soft text-accent px-3 py-1 rounded-full text-xs font-medium"
+                      >
+                        {am}
                         <button
                           type="button"
-                          onClick={() => setExistingImages((arr) => arr.filter((_, i) => i !== idx))}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                          onClick={() => handleChipArrayToggle("pgAmenities", am)}
+                          className="hover:text-accent-hover leading-none"
                         >
                           ×
                         </button>
-                      </div>
-                    );
-                  })}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </Section>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Upload Property Images (Max 8)
-                <span className="text-xs text-gray-500 ml-2">Recommended size: 1200x800px</span>
-              </label>
-              <div
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition ${
-                  formData.images.length >= 8 ? "border-gray-300 bg-gray-100" : "border-blue-400 bg-blue-50 hover:bg-blue-100"
-                }`}
-              >
-                <input
-                  name="images"
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  onChange={handleChange}
-                  disabled={formData.images.length >= 8}
-                  className="hidden"
-                  id="image-upload"
-                />
-                <label
-                  htmlFor="image-upload"
-                  className={`cursor-pointer flex flex-col items-center justify-center ${
-                    formData.images.length >= 8 ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
-                >
-                  <svg className="w-12 h-12 text-blue-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <p className="text-gray-700 mb-1">
-                    {formData.images.length >= 8 ? "Maximum images uploaded" : "Click to browse or drag & drop"}
-                  </p>
-                  <p className="text-sm text-gray-500">{8 - formData.images.length} images remaining</p>
-                </label>
-              </div>
-              {formErrors.images && <p className="mt-1 text-sm text-red-600">{formErrors.images}</p>}
+          {/* ════════════════════ STEP 4 — Photos ════════════════════ */}
+          {STEPS[step - 1] === "Photos" && (
+            <Section eyebrow="Property photos">
 
-              {formData.images.length > 0 && (
-                <div className="mt-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">Uploaded Images</label>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {formData.images.map((file, idx) => {
-                      const url = URL.createObjectURL(file);
+              {/* Existing images (edit mode) */}
+              {isEdit && existingImages.length > 0 && (
+                <div>
+                  <p className="font-eyebrow text-muted mb-3">Existing photos</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {existingImages.map((name, idx) => {
+                      const base = API.defaults.baseURL.replace("/api", "");
+                      const url = `${base}/uploads/${name}`;
                       return (
-                        <div key={`${file.name}-${idx}`} className="relative group">
+                        <div key={`${name}-${idx}`} className="relative group rounded-xl overflow-hidden border border-rule aspect-square">
                           <img
                             src={url}
-                            alt={`Property ${idx + 1}`}
-                            className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                            onLoad={() => URL.revokeObjectURL(url)}
+                            alt={`Existing ${idx + 1}`}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
                           />
+                          <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/20 transition-all duration-200" />
                           <button
                             type="button"
-                            onClick={() => removeImage(idx)}
-                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                            onClick={() => setExistingImages((arr) => arr.filter((_, i) => i !== idx))}
+                            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-card text-ink flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-soft hover:bg-accent hover:text-white"
                           >
                             ×
                           </button>
@@ -688,167 +926,388 @@ export default function PostProperty() {
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        )}
 
+              {/* Upload zone */}
+              <div>
+                <p className="font-eyebrow text-muted mb-3">
+                  Upload photos
+                  <span className="ml-2 normal-case" style={{ fontSize: "0.65rem" }}>
+                    (max 8 · 1200×800 recommended)
+                  </span>
+                </p>
 
-        {/* Step 5: Owner Info */}
-        {STEPS[step - 1] === "Owner Info" && (
-          <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
-            <h3 className="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Owner Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name*</label>
-                <input name="ownerName" value={formData.ownerName} onChange={handleChange} className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.ownerName ? "border-red-500" : "border-gray-300"}`} />
-                {formErrors.ownerName && <p className="mt-1 text-sm text-red-600">{formErrors.ownerName}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email*</label>
-                <input type="email" name="ownerEmail" value={formData.ownerEmail} onChange={handleChange} className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.ownerEmail ? "border-red-500" : "border-gray-300"}`} />
-                {formErrors.ownerEmail && <p className="mt-1 text-sm text-red-600">{formErrors.ownerEmail}</p>}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number*</label>
-                <input type="tel" name="ownerPhone" value={formData.ownerPhone} onChange={handleChange} maxLength={10} className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.ownerPhone ? "border-red-500" : "border-gray-300"}`} />
-                {formErrors.ownerPhone && <p className="mt-1 text-sm text-red-600">{formErrors.ownerPhone}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof Type*</label>
-                <select name="ownerIdType" value={formData.ownerIdType} onChange={handleChange} className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.ownerIdType ? "border-red-500" : "border-gray-300"}`}>
-                  <option value="">Select ID Proof</option>
-                  <option value="aadhaar">Aadhaar Card</option>
-                  <option value="pan">PAN Card</option>
-                  <option value="voter">Voter ID</option>
-                  <option value="driving">Driving License</option>
-                </select>
-                {formErrors.ownerIdType && <p className="mt-1 text-sm text-red-600">{formErrors.ownerIdType}</p>}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ID Number*</label>
-                <input name="ownerIdNumber" value={formData.ownerIdNumber} onChange={handleChange} className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.ownerIdNumber ? "border-red-500" : "border-gray-300"}`} />
-                {formErrors.ownerIdNumber && <p className="mt-1 text-sm text-red-600">{formErrors.ownerIdNumber}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Upload ID Proof*</label>
-                <div className={`border rounded-lg p-3 ${formErrors.ownerIdFile ? "border-red-500" : "border-gray-300"}`}>
-                  <input type="file" name="ownerIdFile" accept="image/*,.pdf" onChange={handleChange} className="w-full" />
+                <div
+                  className={`border-2 border-dashed rounded-2xl bg-paper transition-colors ${
+                    formData.images.length >= 8
+                      ? "border-rule opacity-50"
+                      : formErrors.images
+                      ? "border-red-300"
+                      : "border-rule hover:border-accent"
+                  }`}
+                >
+                  <input
+                    name="images"
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    onChange={handleChange}
+                    disabled={formData.images.length >= 8}
+                    className="hidden"
+                    id="image-upload"
+                  />
+                  <label
+                    htmlFor="image-upload"
+                    className={`flex flex-col items-center justify-center py-10 px-6 cursor-pointer ${
+                      formData.images.length >= 8 ? "cursor-not-allowed" : ""
+                    }`}
+                  >
+                    {/* Camera icon */}
+                    <span className="w-14 h-14 rounded-full bg-accent-soft flex items-center justify-center mb-4">
+                      <svg className="w-7 h-7 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                      </svg>
+                    </span>
+                    <p className="font-medium text-ink text-sm">
+                      {formData.images.length >= 8 ? "Maximum images uploaded" : "Click to browse photos"}
+                    </p>
+                    <p className="text-xs text-muted mt-1">
+                      {formData.images.length >= 8 ? "" : `${8 - formData.images.length} slots remaining`}
+                    </p>
+                  </label>
                 </div>
-                {formErrors.ownerIdFile && <p className="mt-1 text-sm text-red-600">{formErrors.ownerIdFile}</p>}
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ownership Proof Type*</label>
-                <select name="ownershipProofType" value={formData.ownershipProofType} onChange={handleChange} className={`w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.ownershipProofType ? "border-red-500" : "border-gray-300"}`}>
-                  <option value="">Select Proof Type</option>
-                  <option value="saleDeed">Sale Deed/Registry</option>
-                  <option value="propertyTax">Property Tax Receipt</option>
-                  <option value="electricityBill">Electricity Bill</option>
-                  <option value="allotmentLetter">Allotment/Builder Letter</option>
-                </select>
-                {formErrors.ownershipProofType && <p className="mt-1 text-sm text-red-600">{formErrors.ownershipProofType}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Document Number</label>
-                <input name="ownershipProofDocNumber" value={formData.ownershipProofDocNumber} onChange={handleChange} className="w-full rounded-lg border px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300" />
-              </div>
-            </div>
-            <div className="mt-6">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Upload Ownership Proof*</label>
-              <div className={`border rounded-lg p-3 ${formErrors.ownershipProofFile ? "border-red-500" : "border-gray-300"}`}>
-                <input type="file" name="ownershipProofFile" accept="image/*,.pdf" onChange={handleChange} className="w-full" />
-              </div>
-              {formErrors.ownershipProofFile && <p className="mt-1 text-sm text-red-600">{formErrors.ownershipProofFile}</p>}
-            </div>
-          </div>
-        )}
 
-        {/* Review Step */}
-        {step === totalSteps && (
-          <div className="bg-gray-50 p-6 rounded-xl animate-fadeIn">
-            <h3 className="text-xl font-bold mb-6 text-gray-800 border-b pb-2">Review Your Listing</h3>
-            <div className="space-y-6">
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <h4 className="font-bold text-lg text-blue-600 mb-3">Property Details</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><p className="text-sm text-gray-500">Title</p><p className="font-medium">{formData.title || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Description</p><p className="font-medium">{formData.description || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Available For</p><p className="font-medium">{formData.availableFor || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Preferred Tenants</p><p className="font-medium">{formData.preferredTenants || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Occupancy Type</p><p className="font-medium">{formData.occupancyType || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Sharing per Room</p><p className="font-medium">{formData.sharingCount || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Bedrooms</p><p className="font-medium">{formData.bedrooms || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Furnishing</p><p className="font-medium">{formData.roomFurnishing || "—"}</p></div>
-                </div>
+                {formErrors.images && (
+                  <p className="mt-2 text-xs text-red-500">{formErrors.images}</p>
+                )}
+
+                {/* New image previews */}
+                {formData.images.length > 0 && (
+                  <div className="mt-5">
+                    <p className="font-eyebrow text-muted mb-3">New uploads</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {formData.images.map((file, idx) => {
+                        const url = URL.createObjectURL(file);
+                        return (
+                          <div key={`${file.name}-${idx}`} className="relative group rounded-xl overflow-hidden border border-rule aspect-square">
+                            <img
+                              src={url}
+                              alt={`Property ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                              onLoad={() => URL.revokeObjectURL(url)}
+                            />
+                            <div className="absolute inset-0 bg-ink/0 group-hover:bg-ink/20 transition-all duration-200" />
+                            <button
+                              type="button"
+                              onClick={() => removeImage(idx)}
+                              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-card text-ink flex items-center justify-center opacity-0 group-hover:opacity-100 transition shadow-soft hover:bg-accent hover:text-white"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <h4 className="font-bold text-lg text-blue-600 mb-3">Location</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><p className="text-sm text-gray-500">Address</p><p className="font-medium">{formData.address || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Locality</p><p className="font-medium">{formData.locality || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">City</p><p className="font-medium">{formData.city || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Pincode</p><p className="font-medium">{formData.pincode || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Available From</p><p className="font-medium">{formData.availableFrom || "—"}</p></div>
-                </div>
+            </Section>
+          )}
+
+          {/* ════════════════════ STEP 5 — Owner Info ════════════════════ */}
+          {STEPS[step - 1] === "Owner Info" && (
+            <Section eyebrow="Owner information">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Field label="Full name" required error={formErrors.ownerName}>
+                  <input
+                    name="ownerName"
+                    value={formData.ownerName}
+                    onChange={handleChange}
+                    placeholder="Your full name"
+                    className={`input-warm ${formErrors.ownerName ? "border-red-400" : ""}`}
+                  />
+                </Field>
+
+                <Field label="Email address" required error={formErrors.ownerEmail}>
+                  <input
+                    type="email"
+                    name="ownerEmail"
+                    value={formData.ownerEmail}
+                    onChange={handleChange}
+                    placeholder="you@example.com"
+                    className={`input-warm ${formErrors.ownerEmail ? "border-red-400" : ""}`}
+                  />
+                </Field>
               </div>
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <h4 className="font-bold text-lg text-blue-600 mb-3">Pricing</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><p className="text-sm text-gray-500">Monthly Rent</p><p className="font-medium">₹{formData.price || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Security Deposit</p><p className="font-medium">₹{formData.deposit || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Maintenance</p><p className="font-medium">₹{formData.maintenance || "—"} {formData.maintenanceFreq ? `(${formData.maintenanceFreq})` : ""}</p></div>
-                  <div><p className="text-sm text-gray-500">Contract Duration</p><p className="font-medium">{formData.minContractDuration || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Notice Period</p><p className="font-medium">{formData.noticePeriod || "—"}</p></div>
-                  <div><p className="text-sm text-gray-500">Early Leaving Charges</p><p className="font-medium">₹{formData.earlyLeavingCharges || "—"}</p></div>
-                </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Field label="Phone number" required error={formErrors.ownerPhone}>
+                  <input
+                    type="tel"
+                    name="ownerPhone"
+                    value={formData.ownerPhone}
+                    onChange={handleChange}
+                    maxLength={10}
+                    placeholder="10-digit mobile"
+                    className={`input-warm ${formErrors.ownerPhone ? "border-red-400" : ""}`}
+                  />
+                </Field>
+
+                <Field label="ID proof type" error={formErrors.ownerIdType}>
+                  <select
+                    name="ownerIdType"
+                    value={formData.ownerIdType}
+                    onChange={handleChange}
+                    className={`input-warm ${formErrors.ownerIdType ? "border-red-400" : ""}`}
+                  >
+                    <option value="">Select ID proof</option>
+                    <option value="aadhaar">Aadhaar Card</option>
+                    <option value="pan">PAN Card</option>
+                    <option value="voter">Voter ID</option>
+                    <option value="driving">Driving License</option>
+                  </select>
+                </Field>
               </div>
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <h4 className="font-bold text-lg text-blue-600 mb-3">Amenities</h4>
-                <div className="flex flex-wrap gap-2">
-                  {formData.pgAmenities.length > 0 ? formData.pgAmenities.map((am, idx) => (<span key={idx} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">{am}</span>)) : (<p className="text-gray-500">No amenities selected</p>)}
-                </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Field label="ID number" error={formErrors.ownerIdNumber}>
+                  <input
+                    name="ownerIdNumber"
+                    value={formData.ownerIdNumber}
+                    onChange={handleChange}
+                    placeholder="Document number"
+                    className={`input-warm ${formErrors.ownerIdNumber ? "border-red-400" : ""}`}
+                  />
+                </Field>
+
+                <Field label="Upload ID proof" required error={formErrors.ownerIdFile}>
+                  <div
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border bg-white text-ink transition ${
+                      formErrors.ownerIdFile ? "border-red-400" : "border-rule"
+                    }`}
+                  >
+                    <svg className="w-5 h-5 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                    </svg>
+                    <input
+                      type="file"
+                      name="ownerIdFile"
+                      accept="image/*,.pdf"
+                      onChange={handleChange}
+                      className="text-sm text-muted file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent hover:file:text-white file:cursor-pointer file:transition"
+                    />
+                  </div>
+                </Field>
               </div>
-              {user?.role !== "owner" && (
-                <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                  <h4 className="font-bold text-lg text-blue-600 mb-3">Owner Information</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div><p className="text-sm text-gray-500">Name</p><p className="font-medium">{formData.ownerName || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Email</p><p className="font-medium">{formData.ownerEmail || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Phone</p><p className="font-medium">{formData.ownerPhone || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">ID Proof</p><p className="font-medium">{formData.ownerIdType || "—"}: {formData.ownerIdNumber || "—"}</p></div>
-                    <div><p className="text-sm text-gray-500">Ownership Proof</p><p className="font-medium">{formData.ownershipProofType || "—"}: {formData.ownershipProofDocNumber || "—"}</p></div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Field label="Ownership proof type" error={formErrors.ownershipProofType}>
+                  <select
+                    name="ownershipProofType"
+                    value={formData.ownershipProofType}
+                    onChange={handleChange}
+                    className={`input-warm ${formErrors.ownershipProofType ? "border-red-400" : ""}`}
+                  >
+                    <option value="">Select proof type</option>
+                    <option value="saleDeed">Sale Deed / Registry</option>
+                    <option value="propertyTax">Property Tax Receipt</option>
+                    <option value="electricityBill">Electricity Bill</option>
+                    <option value="allotmentLetter">Allotment / Builder Letter</option>
+                  </select>
+                </Field>
+
+                <Field label="Document number">
+                  <input
+                    name="ownershipProofDocNumber"
+                    value={formData.ownershipProofDocNumber}
+                    onChange={handleChange}
+                    placeholder="Optional"
+                    className="input-warm"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Upload ownership proof" required error={formErrors.ownershipProofFile}>
+                <div
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl border bg-white text-ink transition ${
+                    formErrors.ownershipProofFile ? "border-red-400" : "border-rule"
+                  }`}
+                >
+                  <svg className="w-5 h-5 text-muted shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                  <input
+                    type="file"
+                    name="ownershipProofFile"
+                    accept="image/*,.pdf"
+                    onChange={handleChange}
+                    className="text-sm text-muted file:mr-3 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent hover:file:text-white file:cursor-pointer file:transition"
+                  />
+                </div>
+              </Field>
+            </Section>
+          )}
+
+          {/* ════════════════════ REVIEW STEP ════════════════════ */}
+          {step === totalSteps && (
+            <div className="space-y-5">
+              <Section eyebrow="Property details">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                  {[
+                    ["Title", formData.title],
+                    ["Available for", formData.availableFor],
+                    ["Preferred tenants", formData.preferredTenants],
+                    ["Occupancy type", formData.occupancyType],
+                    ["Sharing", formData.sharingCount],
+                    ["Bedrooms", formData.bedrooms],
+                    ["Bathroom", formData.attachedBathroom],
+                    ["Balcony", formData.attachedBalcony],
+                    ["Furnishing", formData.roomFurnishing],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="font-eyebrow text-muted">{label}</p>
+                      <p className="text-ink font-medium text-sm mt-0.5">{val || "—"}</p>
+                    </div>
+                  ))}
+                  {formData.description && (
+                    <div className="col-span-2 sm:col-span-3">
+                      <p className="font-eyebrow text-muted">Description</p>
+                      <p className="text-ink text-sm mt-0.5 leading-relaxed">{formData.description}</p>
+                    </div>
+                  )}
+                </div>
+              </Section>
+
+              <Section eyebrow="Location">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                  {[
+                    ["City", formData.city],
+                    ["Locality", formData.locality],
+                    ["Pincode", formData.pincode],
+                    ["Available from", formData.availableFrom],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="font-eyebrow text-muted">{label}</p>
+                      <p className="text-ink font-medium text-sm mt-0.5">{val || "—"}</p>
+                    </div>
+                  ))}
+                  <div className="col-span-2 sm:col-span-3">
+                    <p className="font-eyebrow text-muted">Address</p>
+                    <p className="text-ink text-sm mt-0.5">{formData.address || "—"}</p>
                   </div>
                 </div>
-              )}
-              <div className="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-                <h4 className="font-bold text-lg text-blue-600 mb-3">Photos</h4>
-                {previewUrls.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {previewUrls.map((url, idx) => (
-                      <img key={idx} src={url} alt={`Property ${idx + 1}`} className="w-full h-24 object-cover rounded-lg border border-gray-200" />
+              </Section>
+
+              <Section eyebrow="Pricing">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                  {[
+                    ["Monthly rent", formData.price ? `₹${formData.price}` : "—"],
+                    ["Security deposit", formData.deposit ? `₹${formData.deposit}` : "—"],
+                    ["Maintenance", formData.maintenance ? `₹${formData.maintenance} (${formData.maintenanceFreq})` : "—"],
+                    ["Contract duration", formData.minContractDuration],
+                    ["Notice period", formData.noticePeriod],
+                    ["Early leaving charges", formData.earlyLeavingCharges ? `₹${formData.earlyLeavingCharges}` : "—"],
+                  ].map(([label, val]) => (
+                    <div key={label}>
+                      <p className="font-eyebrow text-muted">{label}</p>
+                      <p className="text-ink font-medium text-sm mt-0.5">{val || "—"}</p>
+                    </div>
+                  ))}
+                </div>
+              </Section>
+
+              <Section eyebrow="Amenities">
+                {formData.pgAmenities.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {formData.pgAmenities.map((am, idx) => (
+                      <span key={idx} className="bg-accent-soft text-accent px-3 py-1 rounded-full text-xs font-medium">
+                        {am}
+                      </span>
                     ))}
                   </div>
-                ) : (<p className="text-gray-500">No photos uploaded</p>)}
-              </div>
-            </div>
-          </div>
-        )}
+                ) : (
+                  <p className="text-muted text-sm">No amenities selected.</p>
+                )}
+              </Section>
 
-        {/* Navigation Buttons */}
-        <div className="flex justify-between mt-8">
-          {step > 1 ? (<button type="button" onClick={prevStep} disabled={uploading} className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition disabled:opacity-50">Back</button>) : (<div />)}
-          {step < totalSteps ? (<button type="button" onClick={nextStep} disabled={uploading} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition disabled:opacity-50 ml-auto">Continue</button>) : (
-            <button type="submit" disabled={uploading} className="px-8 py-2.5 bg-gradient-to-r from-blue-600 to-green-500 hover:from-blue-700 hover:to-green-600 text-white font-bold rounded-lg shadow-md transition disabled:opacity-70 ml-auto flex items-center">
-              {uploading ? (<><svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Posting...</>) : "Post Property"}
-            </button>
+              {user?.role !== "owner" && (
+                <Section eyebrow="Owner information">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                    {[
+                      ["Name", formData.ownerName],
+                      ["Email", formData.ownerEmail],
+                      ["Phone", formData.ownerPhone],
+                      ["ID proof", formData.ownerIdType ? `${formData.ownerIdType}: ${formData.ownerIdNumber}` : "—"],
+                      ["Ownership proof", formData.ownershipProofType ? `${formData.ownershipProofType}: ${formData.ownershipProofDocNumber || "—"}` : "—"],
+                    ].map(([label, val]) => (
+                      <div key={label}>
+                        <p className="font-eyebrow text-muted">{label}</p>
+                        <p className="text-ink font-medium text-sm mt-0.5">{val || "—"}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Section>
+              )}
+
+              <Section eyebrow="Photos">
+                {previewUrls.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {previewUrls.map((url, idx) => (
+                      <div key={idx} className="aspect-square rounded-xl overflow-hidden border border-rule">
+                        <img src={url} alt={`Property ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted text-sm">No new photos added.</p>
+                )}
+              </Section>
+            </div>
           )}
-        </div>
-      </form>
+
+          {/* ════════════════════ Navigation buttons ════════════════════ */}
+          <div className="flex items-center justify-between pt-2">
+            {step > 1 ? (
+              <button type="button" onClick={prevStep} disabled={uploading} className="btn-ghost disabled:opacity-50">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                Back
+              </button>
+            ) : (
+              <div />
+            )}
+
+            {step < totalSteps ? (
+              <button type="button" onClick={nextStep} disabled={uploading} className="btn-accent disabled:opacity-50 ml-auto">
+                Continue
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            ) : (
+              <button type="submit" disabled={uploading} className="btn-accent disabled:opacity-70 ml-auto min-w-[140px]">
+                {uploading ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Posting…
+                  </>
+                ) : (
+                  <>
+                    {isEdit ? "Save changes" : "Post property"}
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

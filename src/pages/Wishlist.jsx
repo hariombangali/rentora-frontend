@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import API from "../services/api";
 import PropertyCard from "../components/PropertyCard";
 import { useAuth } from "../context/AuthContext";
 import { SkeletonGrid } from "../components/SkeletonCard";
+import { FaHeart } from "react-icons/fa";
 
 export default function Wishlist() {
   const { user } = useAuth();
@@ -24,34 +26,64 @@ export default function Wishlist() {
       .finally(() => setLoading(false));
   }, [user?._id]);
 
-  if (loading) return <div className="max-w-7xl mx-auto px-4 py-6"><SkeletonGrid count={6} /></div>;
+  if (loading)
+    return (
+      <div className="bg-paper min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+          <SkeletonGrid count={6} />
+        </div>
+      </div>
+    );
 
-  if (error) return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="text-center py-16 text-red-500">{error}</div>
-    </div>
-  );
+  if (error)
+    return (
+      <div className="bg-paper min-h-screen">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 text-center">
+          <p className="text-red-500 text-sm">{error}</p>
+        </div>
+      </div>
+    );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold mb-6">My Wishlist</h1>
+    <div className="bg-paper min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+        {/* Page header */}
+        <div className="mb-8">
+          <p className="font-eyebrow text-muted mb-2">Your collection</p>
+          <h1 className="font-display text-3xl text-ink">Saved Properties</h1>
+        </div>
 
-      {wishlist.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg font-medium">No saved properties</p>
-          <p className="text-sm mt-1">Browse properties and click the heart icon to save them here.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {wishlist.map((property) => (
-            <PropertyCard
-              key={property._id}
-              property={property}
-              wishlistIds={wishlist.map((p) => p._id)}
-            />
-          ))}
-        </div>
-      )}
+        {wishlist.length === 0 ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center mb-5">
+              <FaHeart className="text-accent text-2xl" />
+            </div>
+            <h2 className="font-display text-xl text-ink mb-2">Nothing saved yet</h2>
+            <p className="text-muted text-sm max-w-xs mb-6">
+              Browse properties and tap the heart icon to save your favourites here.
+            </p>
+            <Link to="/properties" className="btn-accent">
+              Browse Properties
+            </Link>
+          </div>
+        ) : (
+          <>
+            <p className="font-eyebrow text-muted mb-5">
+              {wishlist.length} {wishlist.length === 1 ? "property" : "properties"}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {wishlist.map((property) => (
+                <PropertyCard
+                  key={property._id}
+                  property={property}
+                  wishlistIds={wishlist.map((p) => p._id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

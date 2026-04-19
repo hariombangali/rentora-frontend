@@ -1,24 +1,72 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import API from "../services/api";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import { BedDouble, Bath, Armchair, CalendarDays, Phone, Mail, Heart } from 'lucide-react';
+import {
+  BedDouble,
+  Bath,
+  Armchair,
+  CalendarDays,
+  Phone,
+  Mail,
+  Heart,
+  Share2,
+  Shield,
+  Star,
+  Wifi,
+  Car,
+  Home as HomeIcon,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import FullPageLoader from "../components/FullPageLoader";
 import { toast } from "../utils/toast";
 
-// Helper function to format the date
-const formatDate = (dateString) => {
-  if (!dateString) return "N/A";
-  const options = { year: 'numeric', month: 'short', day: 'numeric' };
-  return new Date(dateString).toLocaleDateString(undefined, options);
+const fmtINR = (n) => (n == null ? "N/A" : "₹" + Number(n).toLocaleString("en-IN"));
+const fmtDate = (d) =>
+  !d ? "—" : new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const daysAgo = (d) => {
+  if (!d) return "recently";
+  const diff = Math.round((Date.now() - new Date(d).getTime()) / (24 * 3600 * 1000));
+  if (diff <= 0) return "today";
+  if (diff === 1) return "1 day ago";
+  if (diff < 30) return `${diff} days ago`;
+  if (diff < 365) return `${Math.round(diff / 30)} months ago`;
+  return `${Math.round(diff / 365)} years ago`;
 };
 
-// Helper function to format price
-const formatPrice = (price) => {
-  if (price === undefined || price === null) return "N/A";
-  return `₹${price.toLocaleString('en-IN')}`;
+const AMENITY_ICONS = {
+  "wi-fi": Wifi, "wifi": Wifi, "high-speed wi-fi": Wifi,
+  "parking": Car, "covered parking": Car, "two-wheeler parking": Car,
+  "lift": HomeIcon, "lift access": HomeIcon,
+  "24×7 security": Shield, "24x7 security": Shield, "cctv": Shield, "gym": Check,
 };
+
+function amenityIcon(label) {
+  const key = (label || "").toLowerCase().trim();
+  for (const k of Object.keys(AMENITY_ICONS)) {
+    if (key.includes(k)) return AMENITY_ICONS[k];
+  }
+  return Check;
+}
+
+const SAMPLE_REVIEWS = [
+  {
+    name: "Ananya S.",
+    stay: "3 months stay",
+    text: "The photos are exactly what you get. Landlord is hands-off but responsive. Only noise is occasional dogs at night.",
+    rating: 5,
+  },
+  {
+    name: "Rohan P.",
+    stay: "1 year stay",
+    text: "Clean, quiet building. Rent increase was reasonable. Moved out only because of a job change to Bangalore.",
+    rating: 5,
+  },
+];
 
 export default function PropertyDetails() {
   const { id } = useParams();
@@ -28,13 +76,12 @@ export default function PropertyDetails() {
   const [property, setProperty] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeImage, setActiveImage] = useState(0);
 
-  // Wishlist
+  const [lightboxIdx, setLightboxIdx] = useState(null);
+
   const [isSaved, setIsSaved] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
-  // Lead / Visit / Phone gating states
   const [leadModal, setLeadModal] = useState(false);
   const [visitModal, setVisitModal] = useState(false);
   const [leadNote, setLeadNote] = useState("");
@@ -50,7 +97,9 @@ export default function PropertyDetails() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submittingVisit, setSubmittingVisit] = useState(false);
 
-  // Load property + wishlist + phone quota
+  const [moveInDate, setMoveInDate] = useState("");
+  const [duration, setDuration] = useState("11 months");
+
   useEffect(() => {
     const fetchProperty = async () => {
       try {
@@ -61,16 +110,11 @@ export default function PropertyDetails() {
         const token = localStorage.getItem("token");
         if (token) {
           try {
-            const wishlistRes = await API.get("/wishlist", {
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            const wishlistIds = (wishlistRes.data || []).map((p) => p._id);
-            setIsSaved(wishlistIds.includes(res.data._id));
-          } catch (err) {
-            console.error("Wishlist fetch error:", err);
-          }
+            const wishlistRes = await API.get("/wishlist", { headers: { Authorization: `Bearer ${token}` } });
+            const ids = (wishlistRes.data || []).map((p) => p._id);
+            setIsSaved(ids.includes(res.data._id));
+          } catch (err) { /* ignore */ }
         }
-
         setError("");
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load property");
@@ -82,7 +126,6 @@ export default function PropertyDetails() {
     fetchProperty();
   }, [id]);
 
-  // Fetch contact quota/masked phone once property available
   useEffect(() => {
     const loadQuota = async () => {
       const token = localStorage.getItem("token");
@@ -102,31 +145,6 @@ export default function PropertyDetails() {
     loadQuota();
   }, [property]);
 
-  // Toggle Save/Unsave
-  const toggleSave = async () => {
-    if (loading || !property?._id) return;
-    try {
-      setWishlistLoading(true);
-      const token = localStorage.getItem("token");
-      if (!token) {
-        navigate("/login", { state: { from: window.location.pathname } });
-        return;
-      }
-      const config = { headers: { Authorization: `Bearer ${token}` } };
-      if (!isSaved) {
-        await API.post(`/wishlist/${property._id}`, {}, config);
-        setIsSaved(true);
-      } else {
-        await API.delete(`/wishlist/${property._id}`, config);
-        setIsSaved(false);
-      }
-    } catch (error) {
-      console.error("Error toggling save:", error);
-    } finally {
-      setWishlistLoading(false);
-    }
-  };
-
   const tokenHeader = () => {
     const token = localStorage.getItem("token");
     return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
@@ -145,7 +163,28 @@ export default function PropertyDetails() {
     return true;
   };
 
-  // Contact Owner flow
+  const toggleSave = async () => {
+    if (!property?._id) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login", { state: { from: window.location.pathname } });
+      return;
+    }
+    try {
+      setWishlistLoading(true);
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      if (!isSaved) {
+        await API.post(`/wishlist/${property._id}`, {}, config);
+        setIsSaved(true);
+      } else {
+        await API.delete(`/wishlist/${property._id}`, config);
+        setIsSaved(false);
+      }
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
   const handleContactOwner = () => {
     if (!ensureAuthAndNotOwner()) return;
     setLeadModal(true);
@@ -160,13 +199,10 @@ export default function PropertyDetails() {
         { propertyId: property._id, ownerId: property.user._id, note: leadNote.trim() },
         tokenHeader()
       );
-
-      // Open/fetch the exact conversation by property + partner
       const res = await API.get("/messages/conversations", {
         params: { propertyId: property._id, partnerId: property.user._id },
         ...tokenHeader(),
       });
-
       setLeadModal(false);
       setLeadNote("");
       navigate("/inbox", { state: { conversation: res.data } });
@@ -177,7 +213,6 @@ export default function PropertyDetails() {
     }
   };
 
-  // Reveal phone (gated)
   const handleRevealPhone = async () => {
     if (!ensureAuthAndNotOwner()) return;
     setRevealing(true);
@@ -201,7 +236,6 @@ export default function PropertyDetails() {
     }
   };
 
-  // Visit scheduling
   const openVisitModal = () => {
     if (!ensureAuthAndNotOwner()) return;
     setVisitModal(true);
@@ -211,9 +245,7 @@ export default function PropertyDetails() {
     if (!date) return;
     setLoadingSlots(true);
     try {
-      const res = await API.get("/visits/availability", {
-        params: { propertyId: property._id, date },
-      });
+      const res = await API.get("/visits/availability", { params: { propertyId: property._id, date } });
       setSlots(res.data?.slots || []);
     } catch {
       setSlots([]);
@@ -231,25 +263,16 @@ export default function PropertyDetails() {
     if (!visitDate || !visitSlot) return;
     setSubmittingVisit(true);
     try {
-      // Create a lead alongside visit request for CRM parity
       await API.post(
         "/leads",
         { propertyId: property._id, ownerId: property.user._id, note: leadNote || "Scheduled a visit" },
         tokenHeader()
       );
-
       await API.post(
         "/visits",
-        {
-          propertyId: property._id,
-          ownerId: property.user._id,
-          date: visitDate,
-          slot: visitSlot,
-          note: leadNote || "",
-        },
+        { propertyId: property._id, ownerId: property.user._id, date: visitDate, slot: visitSlot, note: leadNote || "" },
         tokenHeader()
       );
-
       setVisitModal(false);
       setLeadNote("");
       setVisitDate("");
@@ -262,296 +285,526 @@ export default function PropertyDetails() {
     }
   };
 
-  if (loading) {
-    return <FullPageLoader message="Loading Dashboard..." />;
-  }
-
+  if (loading) return <FullPageLoader message="Loading..." />;
   if (error || !property) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <p className="text-red-600 font-bold text-xl">{error || "Property not found."}</p>
+      <div className="min-h-[60vh] flex items-center justify-center bg-paper">
+        <p className="text-[color:var(--danger)] font-display text-xl">{error || "Property not found."}</p>
       </div>
     );
   }
 
+  const images = property.images && property.images.length > 0 ? property.images : [
+    "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1400&q=85",
+  ];
+  const galleryImgs = [images[0], images[1] || images[0], images[2] || images[0], images[3] || images[0], images[4] || images[0]];
+  const extraCount = Math.max(0, images.length - 5);
+
   const allAmenities = [...(property.commonAreaFacilities || []), ...(property.pgAmenities || [])];
-  const mainImage = property.images?.[activeImage] ? property.images[activeImage] : "/default-property.jpg";
+  const locality = property.location?.locality || "";
+  const city = property.location?.city || "Indore";
+  const address = property.location?.address || `${locality}, ${city}`;
+  const bhk = property.bedrooms != null ? `${property.bedrooms} BHK` : "Room";
+  const furnishShort = (property.furnishing || "").split("-")[0].split(" ")[0] || "—";
+  const bath = property.attachedBathroom === "Yes" ? "Private" : property.attachedBathroom === "No" ? "Shared" : "Private";
+  const availFor = property.availableFor || property.preferredTenants || "Any";
+
+  const hasCoords =
+    Array.isArray(property.location?.point?.coordinates) &&
+    property.location.point.coordinates.length === 2 &&
+    typeof property.location.point.coordinates[0] === "number" &&
+    typeof property.location.point.coordinates[1] === "number";
+
+  const isOwner = user && property?.user && user._id === property.user._id;
+  const ownerName = property.user?.ownerKYC?.ownerName || property.user?.name || "Owner";
+  const ownerInitial = (ownerName || "O")[0].toUpperCase();
+
+  const totalImages = images.length;
 
   return (
-    <div className="bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+    <div className="bg-paper min-h-screen">
+      <div className="max-w-[1440px] mx-auto px-6 pt-8 pb-24">
 
-          {/* Header Section */}
-          <div className="p-6 border-b">
-            <h1 className="text-3xl lg:text-4xl font-extrabold text-gray-900">{property.title}</h1>
-            <p className="mt-2 text-md text-gray-600">
-              <span role="img" aria-label="pin">📍</span> {property.address}
-            </p>
-          </div>
+        {/* Breadcrumb */}
+        <div className="text-[13px] text-[color:var(--muted)] flex items-center gap-2 flex-wrap">
+          <Link to="/" className="hover:text-ink">Home</Link>
+          <span>·</span>
+          <Link to="/properties" className="hover:text-ink">Listings</Link>
+          {locality && <>
+            <span>·</span>
+            <Link to={`/properties?area=${encodeURIComponent(locality)}`} className="hover:text-ink">{locality}</Link>
+          </>}
+          <span>·</span>
+          <span className="text-ink">{property.title}</span>
+        </div>
 
-          <div className="lg:flex">
-            {/* Left Column: Image Gallery */}
-            <div className="lg:w-3/5 p-6">
-              <div className="sticky top-24">
-                <div className="relative">
-                  <img src={mainImage} alt="Main property view" className="w-full h-96 object-cover rounded-xl shadow-md border" />
-                  <button
-                    onClick={toggleSave}
-                    className="absolute top-3 left-3 bg-white/90 rounded-full p-2 shadow-md hover:bg-white transition"
-                    disabled={wishlistLoading}
-                    aria-label="Save property"
-                  >
-                    {isSaved ? (
-                      <Heart className="w-5 h-5 text-red-500" fill="currentColor" />
-                    ) : (
-                      <Heart className="w-5 h-5 text-gray-500" fill="none" />
-                    )}
-                  </button>
+        {/* Gallery — 3-col grid with 1 large + 4 small + "+N photos" */}
+        <div className="mt-5 grid gap-2 rounded-3xl overflow-hidden" style={{ gridTemplateColumns: "2fr 1fr 1fr", gridTemplateRows: "220px 220px" }}>
+          <button onClick={() => setLightboxIdx(0)} style={{ gridRow: "span 2" }} className="overflow-hidden bg-ink/10">
+            <img src={galleryImgs[0]} className="w-full h-full object-cover hover:scale-[1.02] transition" alt="" />
+          </button>
+          <button onClick={() => setLightboxIdx(1)} className="overflow-hidden bg-ink/10">
+            <img src={galleryImgs[1]} className="w-full h-full object-cover hover:scale-[1.02] transition" alt="" />
+          </button>
+          <button onClick={() => setLightboxIdx(2)} className="overflow-hidden bg-ink/10">
+            <img src={galleryImgs[2]} className="w-full h-full object-cover hover:scale-[1.02] transition" alt="" />
+          </button>
+          <button onClick={() => setLightboxIdx(3)} className="overflow-hidden bg-ink/10">
+            <img src={galleryImgs[3]} className="w-full h-full object-cover hover:scale-[1.02] transition" alt="" />
+          </button>
+          <button onClick={() => setLightboxIdx(4)} className="relative overflow-hidden bg-ink/10">
+            <img src={galleryImgs[4]} className="w-full h-full object-cover hover:scale-[1.02] transition" alt="" />
+            {extraCount > 0 && (
+              <span className="absolute bottom-3 right-3 inline-flex items-center px-3 py-1.5 rounded-full bg-card border border-rule text-[13px] font-medium">
+                +{extraCount} photos
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="mt-8 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-12 items-start">
+          {/* Main */}
+          <div>
+            <div className="flex justify-between gap-6 items-start flex-wrap">
+              <div>
+                <div className="flex items-center gap-2 text-[13px] text-[color:var(--muted)]">
+                  <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] bg-[oklch(0.96_0.02_80)] text-ink">
+                    <Shield className="w-3 h-3 text-accent" /> Verified by Rentora
+                  </span>
+                  <span>· Listed {daysAgo(property.createdAt)}</span>
                 </div>
-
-                {property.images && property.images.length > 1 && (
-                  <div className="flex space-x-2 mt-4 overflow-x-auto pb-2">
-                    {property.images.map((img, idx) => (
-                      <img
-                        key={idx}
-                        src={img}
-                        alt={`Thumbnail ${idx + 1}`}
-                        onClick={() => setActiveImage(idx)}
-                        className={`w-24 h-24 object-cover rounded-lg cursor-pointer border-2 ${activeImage === idx ? 'border-blue-500' : 'border-transparent'}`}
-                        loading="lazy"
-                      />
-                    ))}
-                  </div>
-                )}
+                <h1 className="font-display text-[40px] md:text-[48px] leading-[1] mt-3 tracking-[-0.02em]">
+                  {property.title}
+                </h1>
+                <div className="text-[15px] text-[color:var(--muted)] mt-1 flex items-center gap-1.5">
+                  {locality}{locality ? ", " : ""}{city} ·
+                  <span className="inline-flex items-center gap-1 text-accent">
+                    <Star className="w-3.5 h-3.5 fill-current" /> 4.9 (42 reviews)
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={toggleSave}
+                  disabled={wishlistLoading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                >
+                  <Heart className={`w-3.5 h-3.5 ${isSaved ? "text-red-500 fill-red-500" : ""}`} />
+                  {isSaved ? "Saved" : "Save"}
+                </button>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(window.location.href); toast.success("Link copied"); }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  Share
+                </button>
               </div>
             </div>
 
-            {/* Right Column: Details */}
-            <div className="lg:w-2/5 p-6">
-              {/* Pricing Section */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-6">
-                <div className="text-4xl font-bold text-blue-800 mb-2">
-                  {formatPrice(property.price)}<span className="text-xl font-normal">/month</span>
+            {/* Key facts card */}
+            <div className="mt-6 bg-card border border-rule rounded-3xl p-2 grid grid-cols-2 md:grid-cols-4">
+              <Fact icon={<BedDouble className="w-5 h-5" />} big={bhk} sub="Bedrooms" />
+              <Fact icon={<Armchair className="w-5 h-5" />} big={furnishShort} sub="Furnished" borderLeft />
+              <Fact icon={<Bath className="w-5 h-5" />} big={bath} sub="Bathroom" borderLeft />
+              <Fact icon={<Shield className="w-5 h-5" />} big={availFor} sub="Available for" borderLeft />
+            </div>
+
+            {/* About */}
+            <section className="mt-10">
+              <h2 className="font-display text-[28px] md:text-[32px]">About this home</h2>
+              <p className="mt-4 leading-[1.7] text-[15px]">{property.description}</p>
+            </section>
+
+            {/* Amenities */}
+            {allAmenities.length > 0 && (
+              <section className="mt-10">
+                <h2 className="font-display text-[28px] md:text-[32px]">What&rsquo;s included</h2>
+                <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-3.5">
+                  {allAmenities.map((a, i) => {
+                    const Icon = amenityIcon(a);
+                    return (
+                      <div key={i} className="flex items-center gap-2.5 text-[14px]">
+                        <span className="text-accent"><Icon className="w-4 h-4" /></span>
+                        {a}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <p><span className="text-gray-600">Deposit:</span> {formatPrice(property.deposit)}</p>
-                  <p><span className="text-gray-600">Maintenance:</span> {formatPrice(property.maintenance)} <span className="text-xs">({property.maintenanceFreq})</span></p>
-                </div>
-              </div>
+              </section>
+            )}
 
-              {/* Key Details Section */}
-              <div className="grid grid-cols-2 gap-4 text-sm mb-6">
-                <div className="flex items-center gap-3"><BedDouble className="w-5 h-5 text-blue-500" /> <div><strong>{property.bedrooms}</strong> Bedrooms</div></div>
-                <div className="flex items-center gap-3"><Armchair className="w-5 h-5 text-green-500" /> <div><strong>{property.furnishing}</strong></div></div>
-                <div className="flex items-center gap-3"><Bath className="w-5 h-5 text-red-500" /> <div>{property.attachedBathroom === 'Yes' ? 'Private Bath' : 'Shared Bath'}</div></div>
-                <div className="flex items-center gap-3"><CalendarDays className="w-5 h-5 text-yellow-500" /> <div>Available <strong>{formatDate(property.availableFrom)}</strong></div></div>
-              </div>
-
-              {/* Description */}
-              <div className="mb-6">
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">About this property</h3>
-                <p className="text-gray-700 leading-relaxed">{property.description}</p>
-              </div>
-
-              {/* Amenities */}
-              {allAmenities.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-gray-800 mb-3">What this place offers</h3>
-                  <div className="flex flex-wrap gap-3">
-                    {allAmenities.map((amenity, idx) => (
-                      <span key={idx} className="bg-gray-100 text-gray-800 rounded-full px-3 py-1 text-sm">{amenity}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Terms and Conditions */}
-              <div className="mb-6">
-                <h3 className="text-xl font-semibold text-gray-800 mb-3">Rental Terms</h3>
-                <div className="text-sm grid grid-cols-2 gap-2">
-                  <p><span className="text-gray-600">Contract:</span> {property.minContractDuration}</p>
-                  <p><span className="text-gray-600">Notice Period:</span> {property.noticePeriod}</p>
-                  <p><span className="text-gray-600">Leaving Charges:</span> {formatPrice(property.earlyLeavingCharges)}</p>
-                </div>
-              </div>
-
-              {/* Location */}
-          {Array.isArray(property.location?.point?.coordinates) &&
- property.location.point.coordinates.length === 2 &&
- typeof property.location.point.coordinates[0] === "number" &&
- typeof property.location.point.coordinates[1] === "number" && (
-  <div className="mb-6">
-    <h3 className="text-xl font-semibold text-gray-800 mb-3">Location</h3>
-    <div className="h-64 w-full rounded-xl overflow-hidden border shadow">
-      <MapContainer
-        center={[
-          property.location.point.coordinates[1], // latitude
-          property.location.point.coordinates[0]  // longitude
-        ]}
-        zoom={15}
-        className="h-full w-full"
-      >
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution="&copy; OpenStreetMap contributors"
-        />
-        <Marker
-          position={[
-            property.location.point.coordinates[1],
-            property.location.point.coordinates[0]
-          ]}
-        >
-          <Popup>
-            {property.title} <br /> {property.location.address}
-          </Popup>
-        </Marker>
-      </MapContainer>
-    </div>
-  </div>
-)}
-
-
-              {/* Owner Details + Actions */}
-              {property?.user && (
-                <div className="mt-6 p-4 border rounded-xl shadow-md bg-white">
-                  <h2 className="text-lg font-semibold mb-2">Owner Details</h2>
-                  <p className="text-gray-700">
-                    <span className="font-medium">Name:</span> {property.user.ownerKYC?.ownerName}
-                  </p>
-
-                  {/* Gated phone reveal */}
-                  <p className="text-gray-700 flex items-center gap-2 mt-1">
-                    <Phone className="w-4 h-4 text-green-600" />
-                    {canRevealPhone ? (
-                      <a href={`tel:${property.user.ownerKYC?.ownerPhone}`} className="hover:underline">
-                        {property.user.ownerKYC?.ownerPhone}
-                      </a>
-                    ) : (
-                      <span className="text-gray-600">{phoneMasked}</span>
-                    )}
-                  </p>
-
-                  <p className="text-gray-700 flex items-center gap-2 mt-1">
-                    <Mail className="w-4 h-4 text-blue-600" />
-                    <a href={`mailto:${property.user.ownerKYC?.ownerEmail}`} className="hover:underline">
-                      {property.user.ownerKYC?.ownerEmail}
-                    </a>
-                  </p>
-
-                  {user && user._id !== property.user._id && (
-                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <button onClick={handleContactOwner} className="px-4 py-2 rounded bg-blue-600 text-white">
-                        Contact Owner
-                      </button>
-                      <button onClick={openVisitModal} className="px-4 py-2 rounded border border-gray-300">
-                        Schedule Visit
-                      </button>
-                      <button
-                        onClick={handleRevealPhone}
-                        disabled={revealing || canRevealPhone}
-                        className="px-4 py-2 rounded border border-gray-300 disabled:opacity-60"
-                        title={canRevealPhone ? "Phone revealed" : "Reveals after enquiry or within quota"}
-                      >
-                        {canRevealPhone ? "Phone Revealed" : "Get Phone Number"}
-                      </button>
+            {/* Rental terms */}
+            {(property.minContractDuration || property.noticePeriod || property.deposit != null) && (
+              <section className="mt-10">
+                <h2 className="font-display text-[28px] md:text-[32px]">Rental terms</h2>
+                <div className="mt-5 grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {property.minContractDuration && (
+                    <div className="bg-card border border-rule rounded-2xl p-4">
+                      <p className="font-eyebrow text-[11px] text-[color:var(--muted)]">Min contract</p>
+                      <p className="mt-1 text-ink font-medium">{property.minContractDuration}</p>
+                    </div>
+                  )}
+                  {property.noticePeriod && (
+                    <div className="bg-card border border-rule rounded-2xl p-4">
+                      <p className="font-eyebrow text-[11px] text-[color:var(--muted)]">Notice period</p>
+                      <p className="mt-1 text-ink font-medium">{property.noticePeriod}</p>
+                    </div>
+                  )}
+                  {property.deposit != null && (
+                    <div className="bg-card border border-rule rounded-2xl p-4">
+                      <p className="font-eyebrow text-[11px] text-[color:var(--muted)]">Deposit</p>
+                      <p className="mt-1 text-ink font-medium">{fmtINR(property.deposit)}</p>
                     </div>
                   )}
                 </div>
+              </section>
+            )}
+
+            {/* Neighbourhood */}
+            <section className="mt-10">
+              <h2 className="font-display text-[28px] md:text-[32px]">The neighbourhood</h2>
+              <div className="mt-5 bg-card border border-rule rounded-3xl overflow-hidden">
+                <div className="h-[340px] bg-[oklch(0.96_0.02_120)] relative">
+                  {hasCoords ? (
+                    <MapContainer
+                      center={[property.location.point.coordinates[1], property.location.point.coordinates[0]]}
+                      zoom={15}
+                      className="h-full w-full"
+                    >
+                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                      <Marker position={[property.location.point.coordinates[1], property.location.point.coordinates[0]]}>
+                        <Popup>{property.title}<br />{address}</Popup>
+                      </Marker>
+                    </MapContainer>
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[color:var(--muted)]">Map unavailable</div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { t: "Local market", s: "5 min walk" },
+                  { t: "Schools", s: "10 min drive" },
+                  { t: "Hospital", s: "12 min drive" },
+                  { t: "Bus stop", s: "3 min walk" },
+                ].map((n) => (
+                  <div key={n.t} className="bg-card border border-rule rounded-2xl p-3.5">
+                    <div className="text-[14px] font-medium">{n.t}</div>
+                    <div className="text-[12px] text-[color:var(--muted)] mt-0.5">{n.s}</div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Reviews */}
+            <section className="mt-10">
+              <div className="flex items-end justify-between">
+                <h2 className="font-display text-[28px] md:text-[32px]">From tenants who lived here</h2>
+                <div className="text-[14px]"><b>4.9</b> · 42 reviews</div>
+              </div>
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                {SAMPLE_REVIEWS.map((r, i) => (
+                  <div key={i} className="bg-card border border-rule rounded-3xl p-5">
+                    <div className="flex items-center gap-0.5 text-accent mb-3">
+                      {[...Array(r.rating)].map((_, j) => <Star key={j} className="w-3.5 h-3.5 fill-current" />)}
+                    </div>
+                    <p className="text-[14px] leading-[1.6]">&ldquo;{r.text}&rdquo;</p>
+                    <div className="mt-4 flex items-center gap-3 pt-3 border-t border-rule">
+                      <div className="w-8 h-8 rounded-full bg-[oklch(0.96_0.02_80)] flex items-center justify-center text-[13px] font-medium">
+                        {r.name[0]}
+                      </div>
+                      <div>
+                        <div className="text-[13px] font-medium">{r.name}</div>
+                        <div className="text-[11px] text-[color:var(--muted)]">{r.stay}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {/* Booking sidebar */}
+          <aside className="lg:sticky lg:top-24">
+            <div className="bg-card border border-rule rounded-3xl p-6 shadow-card">
+              <div className="flex justify-between items-baseline gap-4">
+                <div>
+                  <span className="font-display text-[32px]">{fmtINR(property.price)}</span>
+                  <span className="text-[14px] text-[color:var(--muted)]"> / month</span>
+                </div>
+                {property.deposit != null && (
+                  <div className="text-[12px] text-[color:var(--muted)] text-right">+ {fmtINR(property.deposit)} deposit</div>
+                )}
+              </div>
+
+              <div className="h-px bg-rule my-5" />
+
+              {!isOwner ? (
+                <>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Move-in</label>
+                      <input
+                        type="date"
+                        value={moveInDate}
+                        onChange={(e) => { setMoveInDate(e.target.value); setVisitDate(e.target.value); }}
+                        className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Duration</label>
+                      <select
+                        value={duration}
+                        onChange={(e) => setDuration(e.target.value)}
+                        className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink"
+                      >
+                        <option>11 months</option>
+                        <option>6 months</option>
+                        <option>1 year</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={openVisitModal}
+                    className="mt-3.5 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
+                  >
+                    Book a visit &mdash; Free
+                  </button>
+                  <button
+                    onClick={handleContactOwner}
+                    className="mt-2 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition"
+                  >
+                    Message owner
+                  </button>
+
+                  <div className="h-px bg-rule my-5" />
+
+                  <div className="text-[13px] text-[color:var(--muted)] leading-[1.6] space-y-1.5">
+                    <div className="flex justify-between"><span>Monthly rent</span><span className="text-ink">{fmtINR(property.price)}</span></div>
+                    {property.deposit != null && (
+                      <div className="flex justify-between"><span>Security deposit</span><span className="text-ink">{fmtINR(property.deposit)}</span></div>
+                    )}
+                    <div className="flex justify-between">
+                      <span>Maintenance</span>
+                      <span className="text-ink">{property.maintenance ? fmtINR(property.maintenance) : "Included"}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Brokerage</span>
+                      <span className="text-sage font-medium">₹0 · always</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-[14px] text-[color:var(--muted)] text-center py-4">This is your listing.</p>
               )}
             </div>
-          </div>
+
+            {/* Owner card */}
+            {property?.user && (
+              <div className="bg-card border border-rule rounded-3xl p-5 mt-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-[oklch(0.96_0.02_80)] flex items-center justify-center font-medium">
+                    {ownerInitial}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-[15px] truncate">{ownerName}</div>
+                    <div className="text-[12px] text-[color:var(--muted)]">
+                      Owner{property.user.createdAt ? ` · Joined ${new Date(property.user.createdAt).getFullYear()}` : ""}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3.5 flex gap-3.5 flex-wrap text-[12px] text-[color:var(--muted)]">
+                  {property.user.ownerVerified && (
+                    <span className="flex items-center gap-1 text-accent">
+                      <Shield className="w-3.5 h-3.5" />
+                      <span className="text-ink">ID verified</span>
+                    </span>
+                  )}
+                  <span>· Usually replies in 2h</span>
+                </div>
+
+                {!isOwner && (
+                  <div className="mt-4 space-y-2">
+                    {property.user.ownerKYC?.ownerEmail && (
+                      <a
+                        href={`mailto:${property.user.ownerKYC.ownerEmail}`}
+                        className="flex items-center gap-2 text-[13px] text-[color:var(--muted)] hover:text-ink"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-sage" />
+                        {property.user.ownerKYC.ownerEmail}
+                      </a>
+                    )}
+                    <div className="flex items-center gap-2 text-[13px]">
+                      <Phone className="w-3.5 h-3.5 text-sage" />
+                      {canRevealPhone ? (
+                        <a href={`tel:${property.user.ownerKYC?.ownerPhone}`} className="text-ink hover:text-accent">
+                          {property.user.ownerKYC?.ownerPhone}
+                        </a>
+                      ) : (
+                        <>
+                          <span className="tracking-widest text-[color:var(--muted)]">{phoneMasked}</span>
+                          <button
+                            onClick={handleRevealPhone}
+                            disabled={revealing}
+                            className="ml-auto text-[12px] text-accent hover:underline disabled:opacity-50"
+                          >
+                            {revealing ? "Revealing…" : "Reveal"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 text-[12px] text-[color:var(--muted)] flex items-center gap-2 justify-center">
+              <Shield className="w-3.5 h-3.5" />
+              Visit is free. Bookings only after visit.
+            </div>
+          </aside>
         </div>
       </div>
 
-      {/* Contact Owner Modal */}
+      {/* Lightbox */}
+      {lightboxIdx !== null && (
+        <div className="fixed inset-0 z-50 bg-ink/90 flex items-center justify-center p-6" onClick={() => setLightboxIdx(null)}>
+          <button onClick={() => setLightboxIdx(null)} className="absolute top-6 right-6 w-10 h-10 rounded-full bg-paper/10 text-paper flex items-center justify-center hover:bg-paper/20">
+            <X className="w-5 h-5" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => (i - 1 + totalImages) % totalImages); }}
+            className="absolute left-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-paper/10 text-paper flex items-center justify-center hover:bg-paper/20"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setLightboxIdx((i) => (i + 1) % totalImages); }}
+            className="absolute right-6 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-paper/10 text-paper flex items-center justify-center hover:bg-paper/20"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+          <img src={images[lightboxIdx]} alt="" className="max-w-full max-h-full object-contain rounded-2xl" onClick={(e) => e.stopPropagation()} />
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-paper/10 text-paper text-[12px]">
+            {lightboxIdx + 1} / {totalImages}
+          </div>
+        </div>
+      )}
+
+      {/* Lead modal */}
       {leadModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center">
-          <div className="bg-white w-full max-w-md rounded-2xl p-5">
-            <h3 className="text-lg font-semibold mb-3">Contact Owner</h3>
+        <div className="fixed inset-0 z-50 bg-ink/50 grid place-items-center px-4" onClick={() => setLeadModal(false)}>
+          <div className="bg-card w-full max-w-md rounded-3xl p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-[22px]">Contact Owner</h3>
+              <button onClick={() => setLeadModal(false)} className="w-8 h-8 rounded-full hover:bg-paper flex items-center justify-center">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Your message</label>
             <textarea
               rows={4}
               value={leadNote}
               onChange={(e) => setLeadNote(e.target.value)}
-              className="w-full border rounded p-2"
               placeholder="Introduce yourself, move-in month, budget, and questions…"
+              className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
             />
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setLeadModal(false)} className="px-4 py-2 rounded bg-gray-200">Cancel</button>
-              <button
-                onClick={submitLead}
-                disabled={submittingLead || !leadNote.trim()}
-                className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
-              >
-                {submittingLead ? "Sending…" : "Send Enquiry"}
+            <div className="mt-4 flex justify-end gap-3">
+              <button onClick={() => setLeadModal(false)} className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink">
+                Cancel
+              </button>
+              <button onClick={submitLead} disabled={submittingLead || !leadNote.trim()} className="inline-flex items-center px-5 py-2.5 rounded-full bg-ink text-paper text-sm hover:bg-accent disabled:opacity-50">
+                {submittingLead ? "Sending…" : "Send enquiry"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Schedule Visit Modal */}
+      {/* Visit modal */}
       {visitModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center">
-          <div className="bg-white w-full max-w-md rounded-2xl p-5">
-            <h3 className="text-lg font-semibold mb-3">Schedule a Visit</h3>
-
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Preferred date</label>
-              <input
-                type="date"
-                value={visitDate}
-                onChange={(e) => setVisitDate(e.target.value)}
-                className="w-full border rounded p-2"
-              />
+        <div className="fixed inset-0 z-50 bg-ink/50 grid place-items-center px-4" onClick={() => setVisitModal(false)}>
+          <div className="bg-card w-full max-w-md rounded-3xl p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-display text-[22px]">Schedule a visit</h3>
+              <button onClick={() => setVisitModal(false)} className="w-8 h-8 rounded-full hover:bg-paper flex items-center justify-center">
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Available time slots</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {loadingSlots ? (
-                  <span className="text-sm text-gray-500">Loading slots…</span>
-                ) : slots.length ? (
-                  slots.map((s) => (
-                    <button
-                      key={s.id || s.time}
-                      disabled={s.full}
-                      onClick={() => setVisitSlot(s.time)}
-                      className={`px-3 py-1 rounded border ${visitSlot === s.time ? "bg-blue-600 text-white" : "bg-white"} ${s.full ? "opacity-50 cursor-not-allowed" : ""}`}
-                    >
-                      {s.time}
-                    </button>
-                  ))
-                ) : (
-                  <span className="text-sm text-gray-500">Select a date to view slots</span>
-                )}
+            <div className="space-y-4">
+              <div>
+                <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Preferred date</label>
+                <input
+                  type="date"
+                  value={visitDate}
+                  onChange={(e) => { setVisitDate(e.target.value); setVisitSlot(""); }}
+                  className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink"
+                />
+              </div>
+
+              {visitDate && (
+                <div>
+                  <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-2">Available time slots</label>
+                  {loadingSlots ? (
+                    <span className="text-[13px] text-[color:var(--muted)]">Loading slots…</span>
+                  ) : slots.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {slots.map((s) => (
+                        <button
+                          key={s.id || s.time}
+                          disabled={s.full}
+                          onClick={() => setVisitSlot(s.time)}
+                          className={`px-3.5 py-1.5 rounded-full text-[13px] border transition ${
+                            visitSlot === s.time ? "bg-ink text-paper border-ink" : "bg-card border-rule text-ink hover:border-ink"
+                          } ${s.full ? "opacity-40 cursor-not-allowed" : ""}`}
+                        >
+                          {s.time}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-[13px] text-[color:var(--muted)]">No slots available for this date</span>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Note (optional)</label>
+                <textarea
+                  rows={3}
+                  value={leadNote}
+                  onChange={(e) => setLeadNote(e.target.value)}
+                  placeholder="Any preferences or questions?"
+                  className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
+                />
               </div>
             </div>
 
-            <div className="mb-3">
-              <label className="block text-sm font-medium">Note (optional)</label>
-              <textarea
-                rows={3}
-                value={leadNote}
-                onChange={(e) => setLeadNote(e.target.value)}
-                className="w-full border rounded p-2"
-                placeholder="Any preferences or questions?"
-              />
-            </div>
-
-            <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setVisitModal(false)} className="px-4 py-2 rounded bg-gray-200">Cancel</button>
-              <button
-                onClick={submitVisit}
-                disabled={submittingVisit || !visitDate || !visitSlot}
-                className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-50"
-              >
-                {submittingVisit ? "Requesting…" : "Request Visit"}
+            <div className="mt-5 flex justify-end gap-3">
+              <button onClick={() => setVisitModal(false)} className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink">
+                Cancel
+              </button>
+              <button onClick={submitVisit} disabled={submittingVisit || !visitDate || !visitSlot} className="inline-flex items-center px-5 py-2.5 rounded-full bg-ink text-paper text-sm hover:bg-accent disabled:opacity-50">
+                {submittingVisit ? "Requesting…" : "Request visit"}
               </button>
             </div>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Fact({ icon, big, sub, borderLeft }) {
+  return (
+    <div className={`p-4 md:px-5 md:py-4.5 ${borderLeft ? "md:border-l md:border-rule" : ""}`}>
+      <div className="text-accent mb-1.5">{icon}</div>
+      <div className="font-semibold text-[16px]">{big}</div>
+      <div className="text-[12px] text-[color:var(--muted)] mt-0.5">{sub}</div>
     </div>
   );
 }

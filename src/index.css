@@ -4,6 +4,52 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    --ink: #1F2420;
+    --paper: #F6F3EC;
+    --card: #FFFFFF;
+    --accent: oklch(0.62 0.09 50);
+    --accent-hover: oklch(0.55 0.10 50);
+    --accent-soft: oklch(0.95 0.03 50);
+    --sage: oklch(0.72 0.06 150);
+    --sage-hover: oklch(0.65 0.07 150);
+    --sage-soft: oklch(0.95 0.03 150);
+    --rule: #E8E2D3;
+    --muted: #8A8880;
+  }
+
+  html {
+    background-color: var(--paper);
+    color: var(--ink);
+  }
+
+  body {
+    font-family: "Inter", system-ui, sans-serif;
+    background-color: var(--paper);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3 {
+    font-family: "Fraunces", Georgia, serif;
+    font-variation-settings: "SOFT" 50, "opsz" 144;
+  }
+}
+
+/* Utility classes */
+.font-display {
+  font-family: "Fraunces", Georgia, serif;
+  font-variation-settings: "SOFT" 50, "opsz" 144;
+}
+
+.font-eyebrow {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
 
 /* Hide scrollbar for Chrome, Safari and Opera */
 .scrollbar-hide::-webkit-scrollbar {
@@ -12,16 +58,26 @@
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-
-/* Add to index.css or tailwind utilities */
-.input-style {
-  @apply w-full px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 focus:ring-2 focus:ring-yellow-400 focus:outline-none text-lg placeholder-gray-400;
+/* Warm input style */
+.input-warm {
+  @apply w-full px-4 py-3 rounded-xl border border-rule bg-white text-ink placeholder-muted
+    focus:ring-2 focus:ring-accent focus:border-accent focus:outline-none transition;
 }
 
-.btn-primary {
-  @apply w-full py-3 text-lg font-bold bg-gradient-to-r from-blue-600 to-yellow-400 hover:from-yellow-500 hover:to-blue-700 transition rounded-xl shadow text-white;
+/* Accent button */
+.btn-accent {
+  @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full
+    bg-accent text-white font-semibold text-sm transition
+    hover:bg-accent-hover active:scale-[0.97];
+}
+
+/* Ghost button */
+.btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full
+    border border-rule text-ink font-medium text-sm transition
+    hover:bg-ink hover:text-paper active:scale-[0.97];
 }
