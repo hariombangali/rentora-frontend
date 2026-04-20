@@ -230,13 +230,13 @@ export default function MyBookings() {
                               <Meta label="Mode" value="In person" />
                             </div>
                           </div>
-                          <div className="p-3 md:p-5 flex flex-row md:flex-col gap-2 md:gap-2 md:w-[180px]">
-                            <button onClick={() => handleMessageOwner(b)} className="flex-1 md:w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition">
+                          <div className="p-3 md:p-5 flex flex-row md:flex-col gap-2 md:w-[180px] self-center">
+                            <button onClick={() => handleMessageOwner(b)} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition">
                               <MessageSquare className="w-3.5 h-3.5" /> Message
                             </button>
                             <button
                               onClick={() => toast.info?.("Reschedule coming soon") || toast("Reschedule coming soon")}
-                              className="flex-1 md:w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
                             >
                               Reschedule
                             </button>
@@ -311,18 +311,18 @@ export default function MyBookings() {
                               </div>
                             )}
                           </div>
-                          <div className="p-3 md:p-5 flex flex-row md:flex-col gap-2 md:w-[180px]">
+                          <div className="p-3 md:p-5 flex flex-row md:flex-col gap-2 md:w-[180px] self-center">
                             {a.status === "approved" && a.booking ? (
                               <button
                                 onClick={() => setActiveTab("active")}
-                                className="flex-1 md:w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-ink text-paper text-[13px] font-medium"
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition"
                               >
                                 View rental
                               </button>
                             ) : (
                               <Link
                                 to={a.property?._id ? `/properties/${a.property._id}` : "#"}
-                                className="flex-1 md:w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
                               >
                                 View home
                               </Link>
