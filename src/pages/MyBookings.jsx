@@ -3,35 +3,40 @@ import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
-import { Calendar, MessageSquare, Clock, MapPin } from "lucide-react";
+import { Calendar, MessageSquare, Clock, MapPin, FileText } from "lucide-react";
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "N/A");
 const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "N/A");
 const fmtINR = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN");
 
 // Status chip styles matching the design
-const STATUS_CHIP = {
-  approved:    { bg: "oklch(0.94 0.06 150)", color: "oklch(0.45 0.1 150)", label: "Confirmed" },
+export const STATUS_CHIP = {
+  approved:    { bg: "oklch(0.94 0.06 150)", color: "oklch(0.45 0.1 150)", label: "Approved" },
   confirmed:   { bg: "oklch(0.94 0.06 150)", color: "oklch(0.45 0.1 150)", label: "Confirmed" },
-  pending:     { bg: "var(--chip-bg)",       color: "var(--ink-soft)",    label: "Awaiting owner" },
+  reviewing:   { bg: "oklch(0.94 0.05 80)",  color: "oklch(0.45 0.12 60)", label: "Reviewing" },
+  pending:     { bg: "var(--chip-bg)",       color: "var(--ink-soft)",    label: "Pending" },
   rescheduled: { bg: "oklch(0.94 0.05 80)",  color: "oklch(0.45 0.12 60)", label: "Rescheduled" },
   rejected:    { bg: "oklch(0.95 0.04 25)",  color: "oklch(0.5 0.15 25)",  label: "Rejected" },
   cancelled:   { bg: "var(--rule)",          color: "var(--ink-soft)",    label: "Cancelled" },
+  withdrawn:   { bg: "var(--rule)",          color: "var(--ink-soft)",    label: "Withdrawn" },
   completed:   { bg: "var(--chip-bg)",       color: "var(--ink-soft)",    label: "Completed" },
 };
 
 const TABS = [
-  { key: "upcoming", label: "Upcoming visits" },
-  { key: "active",   label: "Active rental" },
-  { key: "past",     label: "Past stays" },
-  { key: "cancelled", label: "Cancelled" },
+  { key: "upcoming",     label: "Upcoming visits" },
+  { key: "applications", label: "Applications" },
+  { key: "active",       label: "Active rental" },
+  { key: "past",         label: "Past stays" },
+  { key: "cancelled",    label: "Cancelled" },
 ];
 
 export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
+  const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("upcoming");
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [withdrawTarget, setWithdrawTarget] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,9 +45,18 @@ export default function MyBookings() {
       navigate("/login", { state: { from: "/my-bookings" } });
       return;
     }
-    API.get("/bookings/my", { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => setBookings(res.data || []))
-      .catch(() => toast.error("Failed to load bookings"))
+    const auth = { headers: { Authorization: `Bearer ${token}` } };
+    Promise.allSettled([
+      API.get("/bookings/my", auth),
+      API.get("/applications/my", auth),
+    ])
+      .then(([bRes, aRes]) => {
+        if (bRes.status === "fulfilled") setBookings(bRes.value.data || []);
+        if (aRes.status === "fulfilled") setApplications(aRes.value.data || []);
+        if (bRes.status === "rejected" && aRes.status === "rejected") {
+          toast.error("Failed to load bookings");
+        }
+      })
       .finally(() => setLoading(false));
   }, [navigate]);
 
@@ -71,7 +85,13 @@ export default function MyBookings() {
     return { upcoming, active, past, cancelled };
   }, [bookings]);
 
-  const counts = { upcoming: upcoming.length, active: active.length, past: past.length, cancelled: cancelled.length };
+  const counts = {
+    upcoming: upcoming.length,
+    applications: applications.filter((a) => !["withdrawn"].includes(a.status)).length,
+    active: active.length,
+    past: past.length,
+    cancelled: cancelled.length + applications.filter((a) => ["withdrawn", "rejected"].includes(a.status)).length,
+  };
 
   const handleMessageOwner = async (b) => {
     try {
@@ -96,6 +116,19 @@ export default function MyBookings() {
       toast.success("Booking cancelled");
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to cancel");
+    }
+  };
+
+  const handleWithdrawConfirm = async () => {
+    const id = withdrawTarget;
+    setWithdrawTarget(null);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.patch(`/applications/${id}/withdraw`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      setApplications((prev) => prev.map((a) => (a._id === id ? { ...a, ...res.data } : a)));
+      toast.success("Application withdrawn");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to withdraw");
     }
   };
 
@@ -141,6 +174,14 @@ export default function MyBookings() {
           confirmLabel="Yes, cancel"
           onConfirm={handleCancelConfirm}
           onCancel={() => setCancelTarget(null)}
+        />
+        <ConfirmModal
+          isOpen={!!withdrawTarget}
+          title="Withdraw Application"
+          message="The owner will be notified and you'll need to reapply to re-enter the queue."
+          confirmLabel="Yes, withdraw"
+          onConfirm={handleWithdrawConfirm}
+          onCancel={() => setWithdrawTarget(null)}
         />
 
         {loading ? (
@@ -206,6 +247,95 @@ export default function MyBookings() {
                             >
                               Cancel visit
                             </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* APPLICATIONS */}
+            {activeTab === "applications" && (
+              <section className="mt-8">
+                <h2 className="font-display text-[24px]">Rental applications</h2>
+                {applications.length === 0 ? (
+                  <EmptyState
+                    icon={<FileText className="w-5 h-5 text-accent" />}
+                    title="No applications yet"
+                    body="When you apply to a home, you'll see the owner's response here."
+                  />
+                ) : (
+                  <div className="mt-4 flex flex-col gap-3.5">
+                    {applications.map((a) => {
+                      const status = STATUS_CHIP[a.status] || STATUS_CHIP.pending;
+                      const img = a.property?.images?.[0] || fallbackImg;
+                      const canWithdraw = ["pending", "reviewing"].includes(a.status);
+                      return (
+                        <div
+                          key={a._id}
+                          className="bg-card border border-rule rounded-3xl p-2 grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-4 md:gap-5 items-stretch"
+                        >
+                          <Link to={a.property?._id ? `/properties/${a.property._id}` : "#"} className="block">
+                            <img src={img} alt="" className="w-full h-[140px] object-cover rounded-2xl" />
+                          </Link>
+                          <div className="px-3 md:px-0 py-3 md:py-4">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span
+                                className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium"
+                                style={{ background: status.bg, color: status.color }}
+                              >
+                                {status.label}
+                              </span>
+                              <span className="text-[12px] text-[color:var(--muted)]">
+                                Applied {formatDate(a.createdAt)}
+                              </span>
+                            </div>
+                            <div className="font-semibold text-[18px] mt-2">{a.property?.title || "Property"}</div>
+                            <div className="text-[13px] text-[color:var(--muted)] mt-0.5 flex items-center gap-1">
+                              <MapPin className="w-3.5 h-3.5" />
+                              {a.property?.location?.locality}{a.property?.location?.locality ? ", " : ""}
+                              {a.property?.location?.city || "Indore"}
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-[13px]">
+                              <Meta label="Move-in" value={formatDate(a.moveInDate)} />
+                              <Meta label="Duration" value={a.duration || "—"} />
+                              <Meta label="Occupants" value={`${a.occupantCount} · ${a.occupantType}`} />
+                              {a.property?.price && <Meta label="Rent" value={fmtINR(a.property.price) + "/mo"} />}
+                            </div>
+                            {a.ownerNote && (
+                              <div className="mt-3 bg-paper border border-rule rounded-2xl px-3 py-2 text-[13px]">
+                                <span className="font-medium">Owner note: </span>
+                                <span className="text-[color:var(--muted)]">{a.ownerNote}</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="p-3 md:p-5 flex flex-row md:flex-col gap-2 md:w-[180px]">
+                            {a.status === "approved" && a.booking ? (
+                              <button
+                                onClick={() => setActiveTab("active")}
+                                className="flex-1 md:w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-ink text-paper text-[13px] font-medium"
+                              >
+                                View rental
+                              </button>
+                            ) : (
+                              <Link
+                                to={a.property?._id ? `/properties/${a.property._id}` : "#"}
+                                className="flex-1 md:w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                              >
+                                View home
+                              </Link>
+                            )}
+                            {canWithdraw && (
+                              <button
+                                onClick={() => setWithdrawTarget(a._id)}
+                                className="text-[12px] text-[color:var(--muted)] hover:text-[color:var(--danger)] transition md:text-left"
+                                style={{ color: undefined }}
+                              >
+                                Withdraw
+                              </button>
+                            )}
                           </div>
                         </div>
                       );

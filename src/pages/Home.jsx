@@ -3,6 +3,7 @@ import API from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import PropertiesMap from '../components/PropertiesMap.jsx';
 import FullPageLoader from '../components/FullPageLoader';
+import { getRecentlyViewed } from '../utils/recentlyViewed';
 import {
   Search,
   Heart,
@@ -104,6 +105,7 @@ export default function Home() {
   const [wishlistIds, setWishlistIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
   const [searchLocation, setSearchLocation] = useState('Vijay Nagar');
   const [searchType, setSearchType] = useState('flat');
   const [searchBudget, setSearchBudget] = useState('10-20k');
@@ -116,6 +118,7 @@ export default function Home() {
         setLoading(false);
       }
     } catch (e) { /* ignore stale cache */ }
+    setRecentlyViewed(getRecentlyViewed());
     fetchAll();
   }, []);
 
@@ -394,6 +397,53 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* RECENTLY VIEWED */}
+      {recentlyViewed.length > 0 && (
+        <section className="max-w-[1280px] mx-auto px-6 pt-20 md:pt-24">
+          <div className="flex items-end justify-between mb-8 md:mb-10 gap-6">
+            <div>
+              <p className="font-eyebrow text-accent">Continue exploring</p>
+              <h2 className="font-display text-[28px] md:text-[40px] mt-2 leading-[1.02]">
+                Homes you were<br />looking at.
+              </h2>
+            </div>
+            <Link to="/properties" className="hidden sm:inline-flex items-center gap-2 px-5 py-3 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition">
+              Keep browsing
+            </Link>
+          </div>
+          <div className="overflow-x-auto scrollbar-hide -mx-6 px-6">
+            <div className="flex gap-5" style={{ width: 'max-content' }}>
+              {recentlyViewed.slice(0, 8).map((p) => (
+                <article key={p._id} className="w-[260px] md:w-[300px] flex-shrink-0 bg-card border border-rule rounded-3xl overflow-hidden hover:-translate-y-1 hover:shadow-card-hover transition-all duration-300">
+                  <Link to={`/properties/${p._id}`} className="block">
+                    <div className="aspect-[4/3] overflow-hidden">
+                      {p.image ? (
+                        <img src={p.image} alt={p.title} className="w-full h-full object-cover" loading="lazy" />
+                      ) : (
+                        <div className="w-full h-full bg-[oklch(0.96_0.02_80)]" />
+                      )}
+                    </div>
+                    <div className="p-4 md:p-5">
+                      <h3 className="font-semibold text-[15px] md:text-[17px] truncate">{p.title}</h3>
+                      <div className="text-[12px] md:text-[13px] mt-0.5 text-[color:var(--muted)] truncate">
+                        {p.locality}{p.locality ? ", " : ""}{p.city}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-rule flex items-end justify-between">
+                        <div>
+                          <span className="font-semibold text-[16px] md:text-[18px]">{fmtINR(p.price)}</span>
+                          <span className="text-[11px] text-[color:var(--muted)]"> / month</span>
+                        </div>
+                        <span className="text-[12px] font-medium underline underline-offset-4">View</span>
+                      </div>
+                    </div>
+                  </Link>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* AREAS */}
       <section className="max-w-[1280px] mx-auto px-6 pt-20 md:pt-24">

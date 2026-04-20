@@ -1,88 +1,101 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
-import { useAuth } from "../context/AuthContext";
 import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
-import { SkeletonGrid } from "../components/SkeletonCard";
+import { X, MapPin, Calendar, MessageSquare, Clock } from "lucide-react";
+import { STATUS_CHIP } from "./MyBookings";
 
-const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN") : "N/A");
+const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
+const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—");
 
-const STATUS_COLORS = {
-  pending: "bg-yellow-100 text-yellow-800",
-  approved: "bg-green-100 text-green-800",
-  rejected: "bg-red-100 text-red-800",
-  cancelled: "bg-gray-100 text-gray-600",
-  rescheduled: "bg-blue-100 text-blue-800",
-  completed: "bg-purple-100 text-purple-800",
-};
+const TABS = [
+  { k: "pending",  label: "Pending" },
+  { k: "upcoming", label: "Upcoming visits" },
+  { k: "active",   label: "Active rentals" },
+  { k: "history",  label: "History" },
+];
 
 export default function OwnerBookings() {
-  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("pending");
 
-  // Confirm modal state
-  const [confirmState, setConfirmState] = useState(null); // { action, id, label, message }
+  const [approveTarget, setApproveTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [rejectTarget, setRejectTarget] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [rejectTargetId, setRejectTargetId] = useState(null);
 
-  // Reschedule modal state
-  const [showReschedule, setShowReschedule] = useState(false);
-  const [currentVisitId, setCurrentVisitId] = useState(null);
+  const [resTarget, setResTarget] = useState(null);
   const [resDate, setResDate] = useState("");
   const [resSlot, setResSlot] = useState("");
+  const [resReason, setResReason] = useState("");
   const [slots, setSlots] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [rescheduling, setRescheduling] = useState(false);
-  const [resReason, setResReason] = useState("");
 
-  const token = localStorage.getItem("token");
-  const authHeader = { headers: { Authorization: `Bearer ${token}` } };
+  const authHeader = useMemo(
+    () => ({ headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }),
+    []
+  );
 
   useEffect(() => {
     API.get("/bookings/owner", authHeader)
       .then((res) => setBookings(res.data || []))
       .catch(() => toast.error("Failed to load booking requests"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [authHeader]);
+
+  useEffect(() => {
+    if (!resTarget || !resDate) return;
+    setLoadingSlots(true);
+    API.get("/visits/availability", { params: { propertyId: resTarget.property?._id, date: resDate } })
+      .then((r) => setSlots(r.data?.slots || []))
+      .catch(() => setSlots([]))
+      .finally(() => setLoadingSlots(false));
+  }, [resTarget, resDate]);
 
   const refreshOne = (updated) => setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
 
-  const approve = async (id) => {
+  const approve = async () => {
+    if (!approveTarget) return;
     try {
-      const res = await API.patch(`/bookings/${id}/approve`, {}, authHeader);
+      const res = await API.patch(`/bookings/${approveTarget}/approve`, {}, authHeader);
       refreshOne(res.data);
       toast.success("Booking approved");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to approve");
+    } finally {
+      setApproveTarget(null);
     }
   };
 
-  const openReject = (id) => { setRejectTargetId(id); setRejectReason(""); setShowRejectModal(true); };
-
   const submitReject = async () => {
-    setShowRejectModal(false);
+    if (!rejectTarget) return;
     try {
-      const res = await API.patch(`/bookings/${rejectTargetId}/reject`, { reason: rejectReason }, authHeader);
+      const res = await API.patch(`/bookings/${rejectTarget}/reject`, { reason: rejectReason }, authHeader);
       refreshOne(res.data);
       toast.success("Booking rejected");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to reject");
+    } finally {
+      setRejectTarget(null);
+      setRejectReason("");
     }
   };
 
-  const cancel = async (id) => {
-    setConfirmState(null);
+  const cancel = async () => {
+    if (!cancelTarget) return;
     try {
-      const res = await API.patch(`/bookings/${id}/cancel`, {}, authHeader);
+      const res = await API.patch(`/bookings/${cancelTarget}/cancel`, {}, authHeader);
       refreshOne(res.data);
       toast.success("Booking cancelled");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to cancel");
+    } finally {
+      setCancelTarget(null);
     }
   };
 
@@ -99,179 +112,337 @@ export default function OwnerBookings() {
   };
 
   const openReschedule = (b) => {
-    setCurrentVisitId(b._id);
-    setResDate(""); setResSlot(""); setResReason(""); setSlots([]);
-    setShowReschedule(true);
+    setResTarget(b); setResDate(""); setResSlot(""); setResReason(""); setSlots([]);
   };
-
-  const loadSlots = async (dateStr, propertyId) => {
-    if (!dateStr) return;
-    setLoadingSlots(true);
-    try {
-      const res = await API.get("/visits/availability", { params: { propertyId, date: dateStr } });
-      setSlots(res.data?.slots || []);
-    } catch { setSlots([]); }
-    finally { setLoadingSlots(false); }
-  };
-
-  useEffect(() => {
-    if (!showReschedule || !resDate || !currentVisitId) return;
-    const b = bookings.find((x) => x._id === currentVisitId);
-    if (b?.property?._id) loadSlots(resDate, b.property._id);
-  }, [showReschedule, resDate, currentVisitId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submitReschedule = async () => {
-    if (!currentVisitId || !resDate || !resSlot) return;
+    if (!resTarget || !resDate || !resSlot) return;
     setRescheduling(true);
     try {
-      const res = await API.patch(`/bookings/${currentVisitId}/reschedule`, { date: resDate, slot: resSlot, reason: resReason }, authHeader);
+      const res = await API.patch(
+        `/bookings/${resTarget._id}/reschedule`,
+        { date: resDate, slot: resSlot, reason: resReason },
+        authHeader
+      );
       refreshOne(res.data);
-      setShowReschedule(false);
       toast.success("Visit rescheduled");
+      setResTarget(null);
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to reschedule");
-    } finally { setRescheduling(false); }
+    } finally {
+      setRescheduling(false);
+    }
   };
 
-  if (loading) return <div className="max-w-4xl mx-auto p-4"><SkeletonGrid count={3} /></div>;
+  const isVisit  = (b) => b.type === "visit";
+  const isLead   = (b) => b.type === "lead";
+  const isRental = (b) => b.type === "rental";
+
+  // Partition
+  const now = Date.now();
+  const pending  = bookings.filter((b) => b.status === "pending");
+  const upcoming = bookings.filter((b) => isVisit(b) && ["approved", "rescheduled"].includes(b.status) && new Date(b.visitDate).getTime() >= now - 24*3600*1000);
+  const active   = bookings.filter((b) => isRental(b) && ["approved", "pending"].includes(b.status));
+  const history  = bookings.filter((b) => ["rejected", "cancelled", "completed"].includes(b.status) || (isVisit(b) && ["approved","rescheduled"].includes(b.status) && new Date(b.visitDate).getTime() < now - 24*3600*1000));
+
+  const counts = { pending: pending.length, upcoming: upcoming.length, active: active.length, history: history.length };
+  const visible = tab === "pending" ? pending : tab === "upcoming" ? upcoming : tab === "active" ? active : history;
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <h2 className="text-2xl font-bold mb-6 text-gray-900">Booking Requests</h2>
+    <div className="bg-paper min-h-screen">
+      <div className="max-w-[1280px] mx-auto px-5 md:px-6 pt-8 pb-24">
+        <div className="text-[13px] text-[color:var(--muted)] flex items-center gap-2">
+          <Link to="/" className="hover:text-ink">Home</Link>
+          <span>·</span>
+          <Link to="/owner" className="hover:text-ink">Dashboard</Link>
+          <span>·</span>
+          <span>Visit requests</span>
+        </div>
 
-      {/* Approve confirm */}
-      <ConfirmModal
-        isOpen={confirmState?.action === "approve"}
-        title="Approve Booking"
-        message="Approve this request? The seeker will be notified by email."
-        confirmLabel="Approve"
-        confirmClass="bg-green-600 hover:bg-green-700"
-        onConfirm={() => { approve(confirmState.id); setConfirmState(null); }}
-        onCancel={() => setConfirmState(null)}
-      />
+        <p className="font-eyebrow text-[color:var(--muted)] mt-4">
+          {counts.pending} pending · {counts.upcoming} upcoming
+        </p>
+        <h1 className="font-display text-[40px] md:text-[56px] leading-[1] mt-2 tracking-[-0.02em]">
+          Visit requests.
+        </h1>
+        <p className="mt-3 max-w-xl text-[15px] text-[color:var(--muted)]">
+          Review visits, leads, and rental requests from prospective tenants.
+        </p>
 
-      {/* Cancel confirm */}
-      <ConfirmModal
-        isOpen={confirmState?.action === "cancel"}
-        title="Cancel Booking"
-        message="Cancel this booking request?"
-        confirmLabel="Yes, Cancel"
-        onConfirm={() => cancel(confirmState.id)}
-        onCancel={() => setConfirmState(null)}
-      />
+        {/* Tabs */}
+        <div className="mt-7 inline-flex bg-card border border-rule rounded-full p-1 gap-0.5 overflow-x-auto max-w-full">
+          {TABS.map((t) => (
+            <button
+              key={t.k}
+              onClick={() => setTab(t.k)}
+              className={`px-4 md:px-5 py-2 rounded-full text-[13px] font-medium whitespace-nowrap transition ${
+                tab === t.k ? "bg-ink text-paper" : "text-[color:var(--muted)] hover:text-ink"
+              }`}
+            >
+              {t.label}{counts[t.k] > 0 ? ` · ${counts[t.k]}` : ""}
+            </button>
+          ))}
+        </div>
 
-      {/* Reject modal with reason */}
-      {showRejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowRejectModal(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">Reject Booking</h3>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Reason (optional)</label>
-            <textarea
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-red-200 resize-none"
-              rows={3}
-              placeholder="Let the seeker know why…"
-            />
-            <div className="mt-4 flex gap-3 justify-end">
-              <button onClick={() => setShowRejectModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
-              <button onClick={submitReject} className="rounded-xl px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700">Reject</button>
+        {/* Confirms */}
+        <ConfirmModal
+          isOpen={!!approveTarget}
+          title="Approve request"
+          message="The tenant will be notified by email and the booking will move to their active list."
+          confirmLabel="Approve"
+          confirmClass="bg-ink hover:bg-accent"
+          onConfirm={approve}
+          onCancel={() => setApproveTarget(null)}
+        />
+        <ConfirmModal
+          isOpen={!!cancelTarget}
+          title="Cancel booking"
+          message="Cancel this booking request?"
+          confirmLabel="Yes, cancel"
+          onConfirm={cancel}
+          onCancel={() => setCancelTarget(null)}
+        />
+
+        {/* Reject modal */}
+        {rejectTarget && (
+          <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm grid place-items-center px-4" onClick={() => setRejectTarget(null)}>
+            <div className="bg-card w-full max-w-md rounded-3xl p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-[22px]">Reject booking</h3>
+                <button onClick={() => setRejectTarget(null)} className="w-8 h-8 rounded-full hover:bg-paper flex items-center justify-center">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Reason (optional)</label>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Let the tenant know why…"
+                className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
+              />
+              <div className="mt-4 flex justify-end gap-3">
+                <button onClick={() => setRejectTarget(null)} className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink">
+                  Cancel
+                </button>
+                <button
+                  onClick={submitReject}
+                  className="inline-flex items-center px-5 py-2.5 rounded-full text-paper text-sm font-medium"
+                  style={{ background: "oklch(0.62 0.15 25)" }}
+                >
+                  Reject
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {bookings.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p className="text-lg font-medium">No booking requests yet</p>
-          <p className="text-sm mt-1">When tenants request your property, they'll appear here.</p>
-        </div>
-      ) : (
-        bookings.map((b) => (
-          <div key={b._id} className="border border-gray-200 rounded-2xl p-5 mb-4 bg-white shadow-sm">
-            <div className="flex justify-between flex-wrap gap-2">
-              <div>
-                <h3 className="font-semibold text-gray-900">
-                  {b.property?.title}
-                  <span className={`ml-2 text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[b.status] || "bg-gray-100"}`}>{b.status}</span>
-                  <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{b.type}</span>
-                </h3>
-                <div className="text-sm text-gray-500 mt-0.5">{b.user?.name} • {b.user?.email}</div>
-                <div className="mt-2 text-sm text-gray-600 space-y-0.5">
-                  {b.type === "visit" && <><div>Visit: {formatDate(b.visitDate)} — {b.visitSlot || "-"}</div></>}
-                  {b.type === "rental" && <><div>Check-in: {formatDate(b.checkIn)}</div>{b.checkOut && <div>Check-out: {formatDate(b.checkOut)}</div>}</>}
-                  {b.type === "lead" && <div>Enquiry</div>}
+        {/* Reschedule modal */}
+        {resTarget && (
+          <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm grid place-items-center px-4" onClick={() => setResTarget(null)}>
+            <div className="bg-card w-full max-w-md rounded-3xl p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-[22px]">Reschedule visit</h3>
+                <button onClick={() => setResTarget(null)} className="w-8 h-8 rounded-full hover:bg-paper flex items-center justify-center">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">New date</label>
+                  <input
+                    type="date"
+                    value={resDate}
+                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => { setResDate(e.target.value); setResSlot(""); }}
+                    className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink"
+                  />
+                </div>
+                {resDate && (
+                  <div>
+                    <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-2">Available time slots</label>
+                    {loadingSlots ? (
+                      <span className="text-[13px] text-[color:var(--muted)]">Loading slots…</span>
+                    ) : slots.length ? (
+                      <div className="flex flex-wrap gap-2">
+                        {slots.map((s) => (
+                          <button
+                            key={s.id || s.time}
+                            disabled={s.full}
+                            onClick={() => setResSlot(s.time)}
+                            className={`px-3.5 py-1.5 rounded-full text-[13px] border transition ${
+                              resSlot === s.time ? "bg-ink text-paper border-ink" : "bg-card border-rule text-ink hover:border-ink"
+                            } ${s.full ? "opacity-40 cursor-not-allowed" : ""}`}
+                          >
+                            {s.time}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[13px] text-[color:var(--muted)]">No slots for this date</span>
+                    )}
+                  </div>
+                )}
+                <div>
+                  <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Reason (optional)</label>
+                  <input
+                    value={resReason}
+                    onChange={(e) => setResReason(e.target.value)}
+                    placeholder="Why is this being rescheduled?"
+                    className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink"
+                  />
                 </div>
               </div>
-              <div className="text-xs text-gray-400 text-right">{new Date(b.createdAt).toLocaleString("en-IN")}</div>
-            </div>
-
-            {b.message && <div className="mt-3 text-sm text-gray-600 bg-gray-50 rounded-xl p-3 whitespace-pre-wrap">{b.message}</div>}
-
-            <div className="mt-4 flex gap-2 flex-wrap">
-              {b.status === "pending" && (
-                <>
-                  <button onClick={() => setConfirmState({ action: "approve", id: b._id })} className="px-4 py-1.5 rounded-xl bg-green-50 text-green-700 border border-green-200 text-sm font-medium hover:bg-green-100">Approve</button>
-                  <button onClick={() => openReject(b._id)} className="px-4 py-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm font-medium hover:bg-red-100">Reject</button>
-                </>
-              )}
-              {b.type === "visit" && !["cancelled", "completed"].includes(b.status) && (
-                <button onClick={() => openReschedule(b)} className="px-4 py-1.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">Reschedule</button>
-              )}
-              {!["cancelled", "completed"].includes(b.status) && (
-                <button onClick={() => setConfirmState({ action: "cancel", id: b._id })} className="px-4 py-1.5 rounded-xl border border-gray-200 text-sm font-medium hover:bg-gray-50">Cancel</button>
-              )}
-              <button onClick={() => messageSeeker(b)} className="px-4 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-sm font-medium hover:bg-blue-100">Message</button>
+              <div className="mt-5 flex justify-end gap-3">
+                <button onClick={() => setResTarget(null)} className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink">
+                  Cancel
+                </button>
+                <button
+                  onClick={submitReschedule}
+                  disabled={rescheduling || !resDate || !resSlot}
+                  className="inline-flex items-center px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent disabled:opacity-50"
+                >
+                  {rescheduling ? "Saving…" : "Confirm reschedule"}
+                </button>
+              </div>
             </div>
           </div>
-        ))
-      )}
+        )}
 
-      {/* Reschedule Modal */}
-      {showReschedule && (
-        <div className="fixed inset-0 bg-black/50 z-50 grid place-items-center px-4" onClick={() => setShowReschedule(false)}>
-          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-4">Reschedule Visit</h3>
-
-            <label className="block text-sm font-medium mb-1">New date</label>
-            <input
-              type="date"
-              value={resDate}
-              min={new Date().toISOString().split("T")[0]}
-              onChange={(e) => setResDate(e.target.value)}
-              className="w-full border rounded-xl p-2 mb-4"
-            />
-
-            <label className="block text-sm font-medium mb-1">Available time slots</label>
-            <div className="flex flex-wrap gap-2 mb-4">
-              {loadingSlots ? (
-                <span className="text-sm text-gray-500">Loading…</span>
-              ) : slots.length ? (
-                slots.map((s) => (
-                  <button key={s.id || s.time} disabled={s.full} onClick={() => setResSlot(s.time)}
-                    className={`px-3 py-1 rounded-xl border text-sm ${resSlot === s.time ? "bg-blue-600 text-white border-blue-600" : "bg-white"} ${s.full ? "opacity-40 cursor-not-allowed" : ""}`}>
-                    {s.time}
-                  </button>
-                ))
-              ) : (
-                <span className="text-sm text-gray-500">Select a date above</span>
-              )}
-            </div>
-
-            <label className="block text-sm font-medium mb-1">Reason (optional)</label>
-            <input type="text" value={resReason} onChange={(e) => setResReason(e.target.value)}
-              className="w-full border rounded-xl p-2 mb-4" placeholder="Reason for reschedule" />
-
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setShowReschedule(false)} className="px-4 py-2 rounded-xl border border-gray-200 text-sm">Close</button>
-              <button onClick={submitReschedule} disabled={rescheduling || !resDate || !resSlot}
-                className="px-4 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50">
-                {rescheduling ? "Saving…" : "Confirm"}
-              </button>
-            </div>
+        {loading ? (
+          <div className="mt-8 grid gap-4">
+            {[...Array(2)].map((_, i) => (
+              <div key={i} className="h-40 rounded-3xl bg-card border border-rule animate-pulse" />
+            ))}
           </div>
-        </div>
-      )}
+        ) : visible.length === 0 ? (
+          <div className="mt-8 bg-card border border-rule rounded-3xl p-12 text-center">
+            <div className="w-12 h-12 rounded-full bg-[oklch(0.96_0.02_80)] flex items-center justify-center mx-auto mb-4">
+              <Calendar className="w-5 h-5 text-accent" />
+            </div>
+            <h3 className="font-display text-[20px]">No {TABS.find((t) => t.k === tab)?.label.toLowerCase()} requests</h3>
+            <p className="text-[14px] text-[color:var(--muted)] mt-1 max-w-sm mx-auto">
+              When a tenant books a visit or sends an enquiry, you'll see it here.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 flex flex-col gap-3.5">
+            {visible.map((b) => {
+              const chip = STATUS_CHIP[b.status] || STATUS_CHIP.pending;
+              return (
+                <div key={b._id} className="bg-card border border-rule rounded-3xl p-5 md:p-6">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className="inline-flex items-center rounded-full px-3 py-1 text-[12px] font-medium"
+                          style={{ background: chip.bg, color: chip.color }}
+                        >
+                          {chip.label}
+                        </span>
+                        <span className="inline-flex items-center rounded-full px-3 py-1 text-[12px] bg-paper border border-rule text-[color:var(--muted)]">
+                          {b.type === "visit" ? "Visit" : b.type === "rental" ? "Rental" : b.type === "lead" ? "Enquiry" : b.type}
+                        </span>
+                      </div>
+                      <h3 className="font-semibold text-[18px] mt-2">{b.property?.title || "Property"}</h3>
+                      <div className="text-[13px] text-[color:var(--muted)] mt-0.5 flex items-center gap-1 flex-wrap">
+                        <MapPin className="w-3.5 h-3.5" />
+                        {b.property?.address || "Indore"}
+                        {b.user?.name && <> · from <span className="text-ink">{b.user.name}</span></>}
+                        {b.user?.email && <> · {b.user.email}</>}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5 text-[13px]">
+                        {isVisit(b) && (
+                          <>
+                            <Meta label="Date" value={formatDateShort(b.visitDate)} />
+                            <Meta label="Time" value={b.visitSlot || "—"} />
+                          </>
+                        )}
+                        {isRental(b) && (
+                          <>
+                            <Meta label="Check-in" value={formatDate(b.checkIn)} />
+                            {b.checkOut && <Meta label="Check-out" value={formatDate(b.checkOut)} />}
+                            {b.priceQuoted && <Meta label="Rent" value={`₹${b.priceQuoted.toLocaleString("en-IN")}/mo`} />}
+                          </>
+                        )}
+                        {isLead(b) && <Meta label="Type" value="Enquiry" />}
+                      </div>
+                      {b.status === "rescheduled" && b.reschedule?.date && (
+                        <div className="mt-3 bg-[oklch(0.94_0.05_80)] border border-rule rounded-2xl px-3 py-2 text-[13px]">
+                          <span className="font-medium">Rescheduled to: </span>
+                          {formatDate(b.reschedule.date)} · {b.reschedule.slot}
+                          {b.reschedule.reason && <div className="text-[12px] mt-0.5 text-[color:var(--muted)]">{b.reschedule.reason}</div>}
+                        </div>
+                      )}
+                      {b.message && (
+                        <div className="mt-3 bg-paper border border-rule rounded-2xl px-3 py-2 text-[13px] whitespace-pre-wrap">
+                          {b.message}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[color:var(--muted)] shrink-0">
+                      <Clock className="w-3 h-3 inline mr-0.5" />
+                      {new Date(b.createdAt).toLocaleString("en-IN")}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 flex gap-2 flex-wrap">
+                    {b.status === "pending" && (
+                      <>
+                        <button
+                          onClick={() => setApproveTarget(b._id)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => setRejectTarget(b._id)}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-rule text-[13px] font-medium hover:border-[color:var(--danger)] transition"
+                          style={{ color: "oklch(0.62 0.15 25)" }}
+                        >
+                          Reject
+                        </button>
+                      </>
+                    )}
+                    {isVisit(b) && !["cancelled", "completed", "rejected"].includes(b.status) && (
+                      <button
+                        onClick={() => openReschedule(b)}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                      >
+                        Reschedule
+                      </button>
+                    )}
+                    {!["cancelled", "completed", "rejected"].includes(b.status) && (
+                      <button
+                        onClick={() => setCancelTarget(b._id)}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-[color:var(--muted)] text-[13px] font-medium hover:border-ink hover:text-ink transition"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      onClick={() => messageSeeker(b)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" /> Message
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Meta({ label, value }) {
+  return (
+    <div>
+      <div className="font-eyebrow text-[11px] text-[color:var(--muted)]">{label}</div>
+      <div className="mt-0.5">{value}</div>
     </div>
   );
 }

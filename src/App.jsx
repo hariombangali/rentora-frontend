@@ -24,6 +24,8 @@ import ProfilePage from "./pages/Profile";
 import Inbox from "./pages/Inbox";
 import MyBookings from "./pages/MyBookings";
 import OwnerBookings from "./pages/OwnerBookings";
+import OwnerApplications from "./pages/OwnerApplications";
+import OwnerDashboard from "./pages/OwnerDashboard";
 import Wishlist from "./pages/Wishlist";
 
 function App() {
@@ -84,7 +86,30 @@ function PublicLayout() {
             <Route path="/login" element={<Login />} />
             <Route path="/inbox" element={<Inbox />} />
             <Route path="/my-bookings" element={<MyBookings />} />
-            <Route path="/owner/bookings" element={<OwnerBookings />} />
+            <Route
+              path="/owner"
+              element={
+                <RoleGuard allowedRoles={["owner"]}>
+                  <OwnerDashboard />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/owner/applications"
+              element={
+                <RoleGuard allowedRoles={["owner"]}>
+                  <OwnerApplications />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/owner/bookings"
+              element={
+                <RoleGuard allowedRoles={["owner"]}>
+                  <OwnerBookings />
+                </RoleGuard>
+              }
+            />
             <Route path="/wishlist" element={<Wishlist />} />
             {/* <Route path="/wishlist" element={<TopArea />} /> */}
 

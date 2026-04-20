@@ -60,11 +60,16 @@ export default function Navbar() {
     navigate("/login");
   };
 
+  const isOwner = user?.role === "owner";
   const navItems = [
     { to: "/", label: "Homes", match: (p) => p === "/" },
     { to: "/properties", label: "Properties", match: (p) => p.startsWith("/properties") },
-    { to: "/#how-it-works", label: "How it works", match: () => false, hash: true },
-    { to: "/postProperty", label: "For owners", match: (p) => p.startsWith("/postProperty") || p.startsWith("/my-properties") },
+    isOwner
+      ? { to: "/owner", label: "Dashboard", match: (p) => p.startsWith("/owner") || p.startsWith("/my-properties") }
+      : { to: "/#how-it-works", label: "How it works", match: () => false, hash: true },
+    isOwner
+      ? { to: "/my-properties", label: "Listings", match: (p) => p.startsWith("/my-properties") }
+      : { to: "/postProperty", label: "For owners", match: (p) => p.startsWith("/postProperty") },
   ];
 
   const PillNav = ({ onClick }) => (

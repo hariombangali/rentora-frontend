@@ -24,6 +24,9 @@ import {
 import { useAuth } from "../context/AuthContext";
 import FullPageLoader from "../components/FullPageLoader";
 import { toast } from "../utils/toast";
+import { trackView } from "../utils/recentlyViewed";
+import RentalApplicationModal from "../components/RentalApplicationModal";
+import HomePropertyCard from "../components/HomePropertyCard";
 
 const fmtINR = (n) => (n == null ? "N/A" : "₹" + Number(n).toLocaleString("en-IN"));
 const fmtDate = (d) =>
@@ -100,6 +103,9 @@ export default function PropertyDetails() {
   const [moveInDate, setMoveInDate] = useState("");
   const [duration, setDuration] = useState("11 months");
 
+  const [applyModal, setApplyModal] = useState(false);
+  const [similar, setSimilar] = useState([]);
+
   useEffect(() => {
     const fetchProperty = async () => {
       try {
@@ -116,6 +122,7 @@ export default function PropertyDetails() {
           } catch (err) { /* ignore */ }
         }
         setError("");
+        trackView(res.data);
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load property");
         setProperty(null);
@@ -125,6 +132,19 @@ export default function PropertyDetails() {
     };
     fetchProperty();
   }, [id]);
+
+  // Load similar properties from dedicated endpoint
+  useEffect(() => {
+    if (!property?._id) return;
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const res = await API.get(`/properties/${property._id}/similar`, { signal: ctrl.signal });
+        setSimilar(Array.isArray(res.data) ? res.data : []);
+      } catch (err) { /* ignore */ }
+    })();
+    return () => ctrl.abort();
+  }, [property?._id]);
 
   useEffect(() => {
     const loadQuota = async () => {
@@ -263,11 +283,6 @@ export default function PropertyDetails() {
     if (!visitDate || !visitSlot) return;
     setSubmittingVisit(true);
     try {
-      await API.post(
-        "/leads",
-        { propertyId: property._id, ownerId: property.user._id, note: leadNote || "Scheduled a visit" },
-        tokenHeader()
-      );
       await API.post(
         "/visits",
         { propertyId: property._id, ownerId: property.user._id, date: visitDate, slot: visitSlot, note: leadNote || "" },
@@ -572,14 +587,23 @@ export default function PropertyDetails() {
                   </div>
 
                   <button
-                    onClick={openVisitModal}
+                    onClick={() => {
+                      if (!ensureAuthAndNotOwner()) return;
+                      setApplyModal(true);
+                    }}
                     className="mt-3.5 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
+                  >
+                    Apply to rent
+                  </button>
+                  <button
+                    onClick={openVisitModal}
+                    className="mt-2 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition"
                   >
                     Book a visit &mdash; Free
                   </button>
                   <button
                     onClick={handleContactOwner}
-                    className="mt-2 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition"
+                    className="mt-2 w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-ink text-sm font-medium hover:text-accent transition"
                   >
                     Message owner
                   </button>
@@ -671,11 +695,44 @@ export default function PropertyDetails() {
             </div>
           </aside>
         </div>
+
+        {/* Similar homes */}
+        {similar.length > 0 && (
+          <section className="mt-16 md:mt-24">
+            <div className="flex items-end justify-between gap-6 mb-8">
+              <div>
+                <p className="font-eyebrow text-accent">You might also like</p>
+                <h2 className="font-display text-[28px] md:text-[40px] mt-2 leading-[1.02]">
+                  Similar homes{locality ? ` in ${locality}` : " nearby"}.
+                </h2>
+              </div>
+              <Link
+                to={locality ? `/properties?area=${encodeURIComponent(locality)}` : "/properties"}
+                className="hidden sm:inline-flex items-center gap-2 px-5 py-3 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition"
+              >
+                See all in {locality || "Indore"}
+              </Link>
+            </div>
+            <div className="overflow-x-auto scrollbar-hide -mx-5 md:-mx-6 px-5 md:px-6">
+              <div className="flex gap-5" style={{ width: "max-content" }}>
+                {similar.map((p) => (
+                  <HomePropertyCard key={p._id} p={p} width="w-[280px] md:w-[320px]" />
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
       </div>
+
+      <RentalApplicationModal
+        open={applyModal}
+        onClose={() => setApplyModal(false)}
+        property={property}
+      />
 
       {/* Sticky mobile CTA bar */}
       {!isOwner && (
-        <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 bg-card/95 backdrop-blur border-t border-rule px-5 py-3 flex items-center gap-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.1)]">
+        <div className="lg:hidden fixed inset-x-0 bottom-0 z-40 bg-card/95 backdrop-blur border-t border-rule px-5 py-3 flex items-center gap-2 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.1)]">
           <div className="flex-1 min-w-0">
             <div className="font-display text-[22px] leading-none">{fmtINR(property.price)}</div>
             <div className="text-[11px] text-[color:var(--muted)] mt-0.5">
@@ -683,16 +740,16 @@ export default function PropertyDetails() {
             </div>
           </div>
           <button
-            onClick={handleContactOwner}
-            className="inline-flex items-center justify-center px-4 py-2.5 rounded-full bg-card border border-rule text-ink text-[13px] font-medium"
+            onClick={openVisitModal}
+            className="inline-flex items-center justify-center px-4 py-2.5 rounded-full bg-card border border-rule text-ink text-[12px] font-medium"
           >
-            Message
+            Visit
           </button>
           <button
-            onClick={openVisitModal}
+            onClick={() => { if (ensureAuthAndNotOwner()) setApplyModal(true); }}
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-ink text-paper text-[13px] font-medium"
           >
-            Book visit
+            Apply
           </button>
         </div>
       )}

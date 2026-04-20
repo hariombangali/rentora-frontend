@@ -28,7 +28,7 @@ export default function OwnerVerification() {
     setLoading(true);
     try {
       const res = await API.get("/admin/owners", authHeader);
-      setOwners(res.data || []);
+      setOwners(res.data?.owners || res.data || []);
       setSelectedOwner(null);
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to load owners");
