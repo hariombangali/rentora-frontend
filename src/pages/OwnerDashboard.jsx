@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FileText, CalendarDays, Home as HomeIcon, ArrowRight, Plus } from "lucide-react";
+import { FileText, CalendarDays, Home as HomeIcon, ArrowRight, Plus, Wrench } from "lucide-react";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -12,6 +12,8 @@ export default function OwnerDashboard() {
     pendingVisits: 0,
     totalBookings: 0,
     listings: 0,
+    openIssues: 0,
+    totalIssues: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -23,12 +25,14 @@ export default function OwnerDashboard() {
       API.get("/applications/owner", auth),
       API.get("/bookings/owner", auth),
       API.get("/properties/my-properties", auth),
-    ]).then(([appsR, bkR, propsR]) => {
+      API.get("/issues/owner", auth),
+    ]).then(([appsR, bkR, propsR, issR]) => {
       const apps = appsR.status === "fulfilled" ? appsR.value.data || [] : [];
       const bks = bkR.status === "fulfilled" ? bkR.value.data || [] : [];
       const props = propsR.status === "fulfilled"
         ? (Array.isArray(propsR.value.data) ? propsR.value.data : propsR.value.data?.properties || [])
         : [];
+      const issues = issR.status === "fulfilled" ? issR.value.data || [] : [];
 
       setCounts({
         pendingApps: apps.filter((a) => a.status === "pending").length,
@@ -36,6 +40,8 @@ export default function OwnerDashboard() {
         pendingVisits: bks.filter((b) => b.type === "visit" && b.status === "pending").length,
         totalBookings: bks.length,
         listings: props.length,
+        openIssues: issues.filter((i) => ["open", "acknowledged", "in_progress"].includes(i.status)).length,
+        totalIssues: issues.length,
       });
       setLoading(false);
     });
@@ -59,12 +65,12 @@ export default function OwnerDashboard() {
         <p className="mt-3 max-w-xl text-[15px] text-[color:var(--muted)]">
           {loading
             ? "Loading your activity…"
-            : counts.pendingApps + counts.pendingVisits === 0
-            ? "All caught up. When tenants apply or request visits, they'll show up here."
-            : `You have ${counts.pendingApps + counts.pendingVisits} item${counts.pendingApps + counts.pendingVisits === 1 ? "" : "s"} that need your attention.`}
+            : counts.pendingApps + counts.pendingVisits + counts.openIssues === 0
+            ? "All caught up. When tenants apply, request visits, or raise issues, they'll show up here."
+            : `You have ${counts.pendingApps + counts.pendingVisits + counts.openIssues} item${counts.pendingApps + counts.pendingVisits + counts.openIssues === 1 ? "" : "s"} that need your attention.`}
         </p>
 
-        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <DashCard
             to="/owner/applications"
             icon={<FileText className="w-5 h-5" />}
@@ -84,6 +90,17 @@ export default function OwnerDashboard() {
             total={counts.totalBookings}
             loading={loading}
             emphasis={counts.pendingVisits > 0}
+          />
+          <DashCard
+            to="/owner/issues"
+            icon={<Wrench className="w-5 h-5" />}
+            title="Maintenance"
+            subtitle="Issues raised by active tenants"
+            badge={counts.openIssues}
+            total={counts.totalIssues}
+            loading={loading}
+            emphasis={counts.openIssues > 0}
+            badgeLabel="open"
           />
           <DashCard
             to="/my-properties"

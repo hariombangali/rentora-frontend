@@ -26,6 +26,7 @@ import MyBookings from "./pages/MyBookings";
 import OwnerBookings from "./pages/OwnerBookings";
 import OwnerApplications from "./pages/OwnerApplications";
 import OwnerDashboard from "./pages/OwnerDashboard";
+import OwnerIssues from "./pages/OwnerIssues";
 import Wishlist from "./pages/Wishlist";
 
 function App() {
@@ -107,6 +108,14 @@ function PublicLayout() {
               element={
                 <RoleGuard allowedRoles={["owner"]}>
                   <OwnerBookings />
+                </RoleGuard>
+              }
+            />
+            <Route
+              path="/owner/issues"
+              element={
+                <RoleGuard allowedRoles={["owner"]}>
+                  <OwnerIssues />
                 </RoleGuard>
               }
             />

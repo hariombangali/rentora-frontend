@@ -3,7 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
-import { Calendar, MessageSquare, Clock, MapPin, FileText } from "lucide-react";
+import PayRentModal from "../components/PayRentModal";
+import RaiseIssueModal from "../components/RaiseIssueModal";
+import { generateAgreementPDF } from "../utils/printable";
+import { Calendar, MessageSquare, Clock, MapPin, FileText, Wrench } from "lucide-react";
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "N/A");
 const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "N/A");
@@ -33,10 +36,13 @@ const TABS = [
 export default function MyBookings() {
   const [bookings, setBookings] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("upcoming");
   const [cancelTarget, setCancelTarget] = useState(null);
   const [withdrawTarget, setWithdrawTarget] = useState(null);
+  const [payTarget, setPayTarget] = useState(null);
+  const [issueTarget, setIssueTarget] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,16 +55,55 @@ export default function MyBookings() {
     Promise.allSettled([
       API.get("/bookings/my", auth),
       API.get("/applications/my", auth),
+      API.get("/issues/my", auth),
     ])
-      .then(([bRes, aRes]) => {
+      .then(([bRes, aRes, iRes]) => {
         if (bRes.status === "fulfilled") setBookings(bRes.value.data || []);
         if (aRes.status === "fulfilled") setApplications(aRes.value.data || []);
+        if (iRes.status === "fulfilled") setIssues(iRes.value.data || []);
         if (bRes.status === "rejected" && aRes.status === "rejected") {
           toast.error("Failed to load bookings");
         }
       })
       .finally(() => setLoading(false));
   }, [navigate]);
+
+  const acceptReschedule = async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.patch(`/bookings/${id}/accept-reschedule`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      setBookings((prev) => prev.map((b) => (b._id === id ? res.data : b)));
+      toast.success("New time confirmed");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed");
+    }
+  };
+  const declineReschedule = async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.patch(`/bookings/${id}/decline-reschedule`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      setBookings((prev) => prev.map((b) => (b._id === id ? res.data : b)));
+      toast.success("Declined — owner will be notified");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed");
+    }
+  };
+
+  const downloadAgreement = async (booking) => {
+    try {
+      const token = localStorage.getItem("token");
+      // Fetch property + owner (populated) for a richer agreement
+      const propRes = await API.get(`/properties/${booking.property?._id || booking.property}`);
+      generateAgreementPDF({
+        booking,
+        property: propRes.data,
+        owner: propRes.data?.user || booking.owner,
+        tenant: JSON.parse(localStorage.getItem("user") || "{}"),
+      });
+    } catch (e) {
+      toast.error("Could not open agreement");
+    }
+  };
 
   // Partition into upcoming visits / active rental / past / cancelled
   const { upcoming, active, past, cancelled } = useMemo(() => {
@@ -229,16 +274,40 @@ export default function MyBookings() {
                               <Meta label="Time" value={b.visitSlot || "—"} />
                               <Meta label="Mode" value="In person" />
                             </div>
+
+                            {b.status === "rescheduled" && b.reschedule?.date && (
+                              <div className="mt-4 bg-[oklch(0.94_0.05_80)] border border-rule rounded-2xl p-3.5">
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                  <div>
+                                    <div className="font-eyebrow text-[10px] text-[color:var(--muted)]">Owner proposed a new time</div>
+                                    <div className="font-medium text-[14px] mt-0.5">
+                                      {formatDateShort(b.reschedule.date)} · {b.reschedule.slot}
+                                    </div>
+                                    {b.reschedule.reason && (
+                                      <div className="text-[12px] text-[color:var(--muted)] mt-0.5">{b.reschedule.reason}</div>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => acceptReschedule(b._id)}
+                                      className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-ink text-paper text-[12px] font-medium hover:bg-accent transition"
+                                    >
+                                      Accept
+                                    </button>
+                                    <button
+                                      onClick={() => declineReschedule(b._id)}
+                                      className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-card border border-rule text-ink text-[12px] font-medium hover:border-ink transition"
+                                    >
+                                      Decline
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <div className="p-3 md:p-5 flex flex-row md:flex-col gap-2 md:w-[180px] self-center">
                             <button onClick={() => handleMessageOwner(b)} className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition">
                               <MessageSquare className="w-3.5 h-3.5" /> Message
-                            </button>
-                            <button
-                              onClick={() => toast.info?.("Reschedule coming soon") || toast("Reschedule coming soon")}
-                              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
-                            >
-                              Reschedule
                             </button>
                             <button
                               onClick={() => setCancelTarget(b._id)}
@@ -352,7 +421,16 @@ export default function MyBookings() {
                 {active.length === 0 ? (
                   <EmptyState icon={<Clock className="w-5 h-5 text-accent" />} title="No active rental" body="When you move into a Rentora home, you'll see your lease here." />
                 ) : (
-                  active.map((b) => <ActiveRentalCard key={b._id} b={b} />)
+                  active.map((b) => (
+                    <ActiveRentalCard
+                      key={b._id}
+                      b={b}
+                      issues={issues.filter((i) => String(i.booking) === String(b._id))}
+                      onPay={() => setPayTarget(b)}
+                      onDownloadAgreement={() => downloadAgreement(b)}
+                      onRaiseIssue={() => setIssueTarget(b)}
+                    />
+                  ))
                 )}
               </section>
             )}
@@ -423,6 +501,25 @@ export default function MyBookings() {
           </>
         )}
       </div>
+
+      <PayRentModal
+        open={!!payTarget}
+        booking={payTarget}
+        onClose={() => setPayTarget(null)}
+        onPaid={() => { setPayTarget(null); /* rely on the booking.paid flag elsewhere */ }}
+      />
+      <RaiseIssueModal
+        open={!!issueTarget}
+        booking={issueTarget}
+        onClose={() => setIssueTarget(null)}
+        onSubmitted={async () => {
+          try {
+            const token = localStorage.getItem("token");
+            const res = await API.get("/issues/my", { headers: { Authorization: `Bearer ${token}` } });
+            setIssues(res.data || []);
+          } catch (e) { /* ignore */ }
+        }}
+      />
     </div>
   );
 }
@@ -451,10 +548,12 @@ function EmptyState({ icon, title, body }) {
   );
 }
 
-function ActiveRentalCard({ b }) {
+function ActiveRentalCard({ b, issues = [], onPay, onDownloadAgreement, onRaiseIssue }) {
   const moveIn = b.checkIn ? new Date(b.checkIn) : null;
   const end = b.checkOut ? new Date(b.checkOut) : null;
   const now = new Date();
+
+  const openIssueCount = issues.filter((i) => ["open", "acknowledged", "in_progress"].includes(i.status)).length;
 
   let progress = 0;
   let monthsIn = 0;
@@ -495,16 +594,52 @@ function ActiveRentalCard({ b }) {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition">
+          <button
+            onClick={onPay}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition"
+          >
             Pay rent{b.priceQuoted ? ` · ${fmtINR(b.priceQuoted)}` : ""}
           </button>
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition">
+          <button
+            onClick={onDownloadAgreement}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+          >
             Download agreement
           </button>
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition">
+          <button
+            onClick={onRaiseIssue}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition"
+          >
             Raise issue
+            {openIssueCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-paper text-[10px] font-semibold">
+                {openIssueCount}
+              </span>
+            )}
           </button>
         </div>
+
+        {issues.length > 0 && (
+          <div className="mt-5 bg-paper border border-rule rounded-2xl p-4">
+            <div className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-2">Your issues</div>
+            <div className="space-y-2">
+              {issues.slice(0, 3).map((i) => {
+                const statusLabel = i.status.replace("_", " ");
+                return (
+                  <div key={i._id} className="flex items-center justify-between gap-3 text-[13px]">
+                    <div className="min-w-0">
+                      <span className="font-medium">{i.category}</span>
+                      <span className="text-[color:var(--muted)]"> · {i.description.slice(0, 60)}{i.description.length > 60 ? "…" : ""}</span>
+                    </div>
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] capitalize" style={{ background: ["open"].includes(i.status) ? "oklch(0.95 0.04 25)" : i.status === "resolved" ? "oklch(0.94 0.06 150)" : "oklch(0.94 0.05 80)", color: ["open"].includes(i.status) ? "oklch(0.5 0.15 25)" : i.status === "resolved" ? "oklch(0.45 0.1 150)" : "oklch(0.45 0.12 60)" }}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-3xl bg-paper p-5">
