@@ -43,7 +43,8 @@ export default function OwnerBookings() {
 
   useEffect(() => {
     API.get("/bookings/owner", authHeader)
-      .then((res) => setBookings(res.data || []))
+      // "lead" entries are now handled in the Inbox as real chat threads, not bookings.
+      .then((res) => setBookings((res.data || []).filter((b) => b.type !== "lead")))
       .catch(() => toast.error("Failed to load booking requests"))
       .finally(() => setLoading(false));
   }, [authHeader]);

@@ -82,12 +82,15 @@ function PublicLayout() {
   const location = useLocation();
   const { user } = useAuth();
   const isAuthRoute = location.pathname === "/login";
+  // App-shell routes lock to the viewport (no page scroll, no footer) so internal panes
+  // can manage their own scroll regions.
+  const isAppShell = location.pathname === "/inbox";
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className={`flex flex-col ${isAppShell ? "h-[100dvh] overflow-hidden" : "min-h-screen"}`}>
       <ScrollToTop />
       {!isAuthRoute && <Navbar />}
-      <main className="flex-grow">
+      <main className={isAppShell ? "flex-1 min-h-0 overflow-hidden" : "flex-grow"}>
         <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/properties" element={<Properties />} />
@@ -194,7 +197,7 @@ function PublicLayout() {
             />
         </Routes>
       </main>
-      {!isAuthRoute && <Footer />}
+      {!isAuthRoute && !isAppShell && <Footer />}
     </div>
   );
 }

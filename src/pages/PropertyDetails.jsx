@@ -97,10 +97,8 @@ export default function PropertyDetails() {
   const [isSaved, setIsSaved] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
-  const [leadModal, setLeadModal] = useState(false);
   const [visitModal, setVisitModal] = useState(false);
   const [leadNote, setLeadNote] = useState("");
-  const [submittingLead, setSubmittingLead] = useState(false);
 
   const [phoneMasked, setPhoneMasked] = useState("**********");
   const [canRevealPhone, setCanRevealPhone] = useState(false);
@@ -217,31 +215,16 @@ export default function PropertyDetails() {
     }
   };
 
-  const handleContactOwner = () => {
+  const handleContactOwner = async () => {
     if (!ensureAuthAndNotOwner()) return;
-    setLeadModal(true);
-  };
-
-  const submitLead = async () => {
-    if (!leadNote.trim()) return;
-    setSubmittingLead(true);
     try {
-      await API.post(
-        "/leads",
-        { propertyId: property._id, ownerId: property.user._id, note: leadNote.trim() },
-        tokenHeader()
-      );
       const res = await API.get("/messages/conversations", {
         params: { propertyId: property._id, partnerId: property.user._id },
         ...tokenHeader(),
       });
-      setLeadModal(false);
-      setLeadNote("");
       navigate("/inbox", { state: { conversation: res.data } });
     } catch (e) {
-      toast.error(e.response?.data?.message || "Failed to submit enquiry");
-    } finally {
-      setSubmittingLead(false);
+      toast.error(e.response?.data?.message || "Could not open chat");
     }
   };
 
@@ -847,36 +830,6 @@ export default function PropertyDetails() {
           <img src={images[lightboxIdx]} alt="" className="max-w-full max-h-full object-contain rounded-2xl" onClick={(e) => e.stopPropagation()} />
           <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-paper/10 text-paper text-[12px]">
             {lightboxIdx + 1} / {totalImages}
-          </div>
-        </div>
-      )}
-
-      {/* Lead modal */}
-      {leadModal && (
-        <div className="fixed inset-0 z-50 bg-ink/50 grid place-items-center px-4" onClick={() => setLeadModal(false)}>
-          <div className="bg-card w-full max-w-md rounded-3xl p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-[22px]">Contact Owner</h3>
-              <button onClick={() => setLeadModal(false)} className="w-8 h-8 rounded-full hover:bg-paper flex items-center justify-center">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Your message</label>
-            <textarea
-              rows={4}
-              value={leadNote}
-              onChange={(e) => setLeadNote(e.target.value)}
-              placeholder="Introduce yourself, move-in month, budget, and questions…"
-              className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
-            />
-            <div className="mt-4 flex justify-end gap-3">
-              <button onClick={() => setLeadModal(false)} className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink">
-                Cancel
-              </button>
-              <button onClick={submitLead} disabled={submittingLead || !leadNote.trim()} className="inline-flex items-center px-5 py-2.5 rounded-full bg-ink text-paper text-sm hover:bg-accent disabled:opacity-50">
-                {submittingLead ? "Sending…" : "Send enquiry"}
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
+import { Heart, MessageSquare } from "lucide-react";
 
 export default function Navbar() {
   const [accountDropdown, setAccountDropdown] = useState(false);
@@ -66,6 +67,7 @@ export default function Navbar() {
   const accountLinks = [
     { to: "/profile", label: "Profile" },
     { to: "/wishlist", label: "Saved" },
+    { to: "/inbox", label: "Inbox" },
     isOwner
       ? { to: "/owner", label: "Owner Bookings" }
       : { to: "/my-bookings", label: "My Bookings" },
@@ -76,13 +78,30 @@ export default function Navbar() {
     { to: "/properties", label: "Properties", match: (p) => p.startsWith("/properties") },
     isOwner
       ? { to: "/owner", label: "Dashboard", match: (p) => p === "/owner" || p.startsWith("/owner/") }
-      : { to: "/#how-it-works", label: "How it works", match: () => false, hash: true },
+      : user
+        ? { to: "/my-bookings", label: "My bookings", match: (p) => p.startsWith("/my-bookings") }
+        : { to: "/#how-it-works", label: "How it works", match: () => false, hash: true },
     showOwnerCtas && (
       isOwner
         ? { to: "/my-properties", label: "Listings", match: (p) => p.startsWith("/my-properties") }
         : { to: "/postProperty", label: "For owners", match: (p) => p.startsWith("/postProperty") }
     ),
   ].filter(Boolean);
+
+  const IconLink = ({ to, label, children, active }) => (
+    <Link
+      to={to}
+      aria-label={label}
+      title={label}
+      className={`relative inline-flex items-center justify-center w-9 h-9 rounded-full border transition ${
+        active
+          ? "bg-ink text-paper border-ink"
+          : "bg-card border-rule text-ink/75 hover:text-ink hover:border-ink"
+      }`}
+    >
+      {children}
+    </Link>
+  );
 
   const PillNav = ({ onClick }) => (
     <nav className="hidden md:flex items-center gap-1 text-[14px] p-1 rounded-full bg-card border border-rule">
@@ -196,14 +215,22 @@ export default function Navbar() {
 
           <PillNav />
 
-          <div className="hidden md:flex items-center gap-3">
+          <div className="hidden md:flex items-center gap-2">
             {user ? (
               <>
+                {!isOwner && (
+                  <IconLink to="/wishlist" label="Saved" active={location.pathname.startsWith("/wishlist")}>
+                    <Heart className="w-4 h-4" strokeWidth={1.75} />
+                  </IconLink>
+                )}
+                <IconLink to="/inbox" label="Inbox" active={location.pathname.startsWith("/inbox")}>
+                  <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
+                </IconLink>
                 <NotificationBell />
                 {isOwner && (
                   <Link
                     to="/postProperty"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
+                    className="ml-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
                   >
                     List a home
                   </Link>

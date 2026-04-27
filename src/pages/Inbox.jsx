@@ -1,22 +1,14 @@
 import { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue } from "react";
-import { io } from "socket.io-client";
 import API from "../services/api";
+import { getSocket } from "../services/socket";
 import { useAuth } from "../context/AuthContext";
 import { useLocation } from "react-router-dom";
-
-const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace("/api", "");
 
 const initials = (name = "U") =>
   name.trim().split(/\s+/).map((s) => s?.[0]?.toUpperCase() || "").slice(0, 2).join("") || "U";
 
 const formatTime = (iso) =>
   iso ? new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-
-const getRoomKey = (a, b, propId) => {
-  const parts = [String(a), String(b)];
-  if (propId) parts.push(String(propId));
-  return `conv_${parts.sort().join("_")}`;
-};
 
 export default function Inbox() {
   const { user } = useAuth();
@@ -37,28 +29,69 @@ export default function Inbox() {
   const bottomRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const activeFetchKeyRef = useRef(null); // race-guard for conversation switching
 
   // Debounce search with useDeferredValue
   const deferredQuery = useDeferredValue(query);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages (NOT on typing indicator — that would yank the user away from history)
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, partnerTyping]);
+  }, [messages]);
 
   const convKeyOf = (c) =>
     c ? `${c.partner?._id || ""}_${c.property?._id || "noProperty"}` : "";
 
-  // --- Socket.io setup ---
+  // --- Socket.io setup (shared instance — token rotation handled by getSocket()) ---
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const socket = io(SOCKET_URL, {
-      auth: { token },
-      transports: ["websocket"],
-    });
-    socketRef.current = socket;
-    return () => socket.disconnect();
+    socketRef.current = getSocket();
+    // Don't disconnect on unmount — the socket is shared with notifications, issue-updates, etc.
   }, []);
+
+  // Global "message:preview" listener — keeps the sidebar live even when the
+  // affected conversation isn't currently open.
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !user?._id) return;
+
+    const handlePreview = (preview) => {
+      const partnerId = preview?.partner?._id;
+      if (!partnerId) return;
+      const propId = preview?.property?._id;
+      const incomingKey = `${partnerId}_${propId || "noProperty"}`;
+      const isActive = selectedConversation && convKeyOf(selectedConversation) === incomingKey;
+
+      setConversations((prev) => {
+        const idx = prev.findIndex((c) => convKeyOf(c) === incomingKey);
+        if (idx === -1) {
+          // brand-new conversation
+          return [{
+            partner: preview.partner,
+            property: preview.property,
+            lastMessage: preview.lastMessage,
+            updatedAt: preview.updatedAt,
+            unreadCount: isActive ? 0 : 1,
+          }, ...prev];
+        }
+        const existing = prev[idx];
+        const updated = {
+          ...existing,
+          lastMessage: preview.lastMessage,
+          updatedAt: preview.updatedAt,
+          unreadCount: isActive ? 0 : (Number(existing.unreadCount) || 0) + 1,
+        };
+        return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+      });
+
+      if (!isActive) {
+        setConvStats((s) => ({ ...s, unread: (Number(s.unread) || 0) + 1 }));
+      }
+    };
+
+    socket.on("message:preview", handlePreview);
+    return () => socket.off("message:preview", handlePreview);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, selectedConversation]);
 
   // Join room and listen for events when conversation changes
   useEffect(() => {
@@ -67,7 +100,6 @@ export default function Inbox() {
 
     const partnerId = selectedConversation.partner?._id;
     const propId = selectedConversation.property?._id;
-    const roomKey = getRoomKey(user._id, partnerId, propId);
 
     socket.emit("join_room", { senderId: user._id, receiverId: partnerId, propertyId: propId });
 
@@ -76,14 +108,14 @@ export default function Inbox() {
       const senderId = msg.sender?._id?.toString() || msg.sender?.toString();
       if (senderId !== user._id?.toString()) {
         setMessages((prev) => [...prev, msg]);
-        // Update conversation preview
-        setConversations((prev) =>
-          prev.map((c) =>
-            convKeyOf(c) === convKeyOf(selectedConversation)
-              ? { ...c, lastMessage: msg.content, updatedAt: msg.createdAt }
-              : c
-          )
-        );
+        // Update preview AND bubble this conversation to the top of the list
+        setConversations((prev) => {
+          const key = convKeyOf(selectedConversation);
+          const idx = prev.findIndex((c) => convKeyOf(c) === key);
+          if (idx === -1) return prev;
+          const updated = { ...prev[idx], lastMessage: msg.content, updatedAt: msg.createdAt };
+          return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
+        });
       }
     };
 
@@ -158,7 +190,24 @@ export default function Inbox() {
 
   // Fetch messages for selected conversation
   useEffect(() => {
-    if (!selectedConversation) return;
+    // Clear stale state the instant we switch — no flicker of the previous conv's bubbles.
+    setMessages([]);
+    setPartnerTyping(false);
+    if (!selectedConversation) {
+      activeFetchKeyRef.current = null;
+      return;
+    }
+
+    const key = convKeyOf(selectedConversation);
+    activeFetchKeyRef.current = key;
+
+    // Decrement the global unread badge by however many this conversation had.
+    const target = conversations.find((c) => convKeyOf(c) === key);
+    const wasUnread = Number(target?.unreadCount) || 0;
+    if (wasUnread > 0) {
+      setConvStats((s) => ({ ...s, unread: Math.max(0, s.unread - wasUnread) }));
+    }
+
     const fetchMessages = async () => {
       try {
         setLoadingMsgs(true);
@@ -169,22 +218,24 @@ export default function Inbox() {
           ? `/messages/${partnerId}?propertyId=${propId}`
           : `/messages/${partnerId}`;
         const res = await API.get(url, { headers: { Authorization: `Bearer ${token}` } });
+        // Drop the response if the user moved on to a different conversation.
+        if (activeFetchKeyRef.current !== key) return;
         setMessages(res.data || []);
         setConversations((prev) =>
-          prev.map((c) =>
-            convKeyOf(c) === convKeyOf(selectedConversation) ? { ...c, unreadCount: 0 } : c
-          )
+          prev.map((c) => (convKeyOf(c) === key ? { ...c, unreadCount: 0 } : c))
         );
         requestAnimationFrame(() => {
           listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
         });
       } catch (err) {
+        if (activeFetchKeyRef.current !== key) return;
         console.error("Failed to load messages", err);
       } finally {
-        setLoadingMsgs(false);
+        if (activeFetchKeyRef.current === key) setLoadingMsgs(false);
       }
     };
     fetchMessages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversation]);
 
   // Emit typing events
@@ -194,7 +245,6 @@ export default function Inbox() {
       if (!selectedConversation || !user || !socketRef.current) return;
       const partnerId = selectedConversation.partner?._id;
       const propId = selectedConversation.property?._id;
-      const roomKey = getRoomKey(user._id, partnerId, propId);
       socketRef.current.emit("typing", { senderId: user._id, receiverId: partnerId, propertyId: propId });
       clearTimeout(typingTimerRef.current);
       typingTimerRef.current = setTimeout(() => {
@@ -209,8 +259,6 @@ export default function Inbox() {
     // Stop typing indicator immediately
     if (socketRef.current && user && selectedConversation) {
       const partnerId = selectedConversation.partner?._id;
-      const propId = selectedConversation.property?._id;
-      const roomKey = getRoomKey(user._id, partnerId, propId);
       socketRef.current.emit("stop_typing", { senderId: user._id, receiverId: partnerId, propertyId: selectedConversation.property?._id });
       clearTimeout(typingTimerRef.current);
     }
@@ -229,11 +277,10 @@ export default function Inbox() {
       setNewMessage("");
       setConversations((prev) => {
         const key = convKeyOf(selectedConversation);
-        return prev.map((c) =>
-          convKeyOf(c) === key
-            ? { ...c, lastMessage: res.data?.content, updatedAt: res.data?.createdAt }
-            : c
-        );
+        const idx = prev.findIndex((c) => convKeyOf(c) === key);
+        if (idx === -1) return prev;
+        const updated = { ...prev[idx], lastMessage: res.data?.content, updatedAt: res.data?.createdAt };
+        return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
       });
       requestAnimationFrame(() => {
         listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -264,7 +311,7 @@ export default function Inbox() {
   const showListMobile = !selectedConversation;
 
   return (
-    <div className="flex h-[100dvh] bg-paper">
+    <div className="flex h-full bg-paper">
 
       {/* ── Left sidebar: conversation list ── */}
       <aside
