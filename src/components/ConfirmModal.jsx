@@ -2,23 +2,23 @@ export default function ConfirmModal({ isOpen, title, message, confirmLabel = "C
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 backdrop-blur-sm px-4" onClick={onCancel}>
       <div
-        className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-sm rounded-3xl bg-card p-6 shadow-card-hover"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-        {message && <p className="mt-2 text-sm text-gray-600">{message}</p>}
-        <div className="mt-6 flex gap-3 justify-end">
+        <h3 className="font-display text-[22px] text-ink">{title}</h3>
+        {message && <p className="mt-2 text-sm text-[color:var(--muted)] leading-relaxed">{message}</p>}
+        <div className="mt-6 flex gap-2 justify-end">
           <button
             onClick={onCancel}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold text-white ${confirmClass}`}
+            className={`inline-flex items-center px-5 py-2.5 rounded-full text-paper text-sm font-medium transition ${confirmClass}`}
           >
             {confirmLabel}
           </button>

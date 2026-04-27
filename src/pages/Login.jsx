@@ -109,6 +109,7 @@ export default function Login() {
         email: signupEmail,
         password: signupPassword,
         contact: signupPhone,
+        role: signupRole,
       });
       localStorage.setItem("token", res.data.token);
       afterAuth(res.data);
@@ -209,9 +210,9 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-paper">
+    <div className="h-screen grid grid-cols-1 lg:grid-cols-2 bg-paper overflow-hidden">
       {/* LEFT — form */}
-      <div className="px-6 py-10 md:px-12 md:py-10 flex flex-col min-h-screen">
+      <div className="px-6 py-10 md:px-12 md:py-10 flex flex-col overflow-y-auto scrollbar-hide">
         <Link to="/" className="inline-flex items-center gap-2.5">
           <span className="w-9 h-9 rounded-2xl bg-accent flex items-center justify-center text-paper font-display text-[18px] leading-none">R</span>
           <span className="font-semibold text-ink text-[17px]">Rentora</span>

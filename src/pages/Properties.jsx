@@ -326,7 +326,23 @@ export default function Properties() {
                 <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
                   {loading ? (
                     [...Array(6)].map((_, i) => (
-                      <div key={i} className="bg-card border border-rule rounded-3xl h-[420px] animate-pulse" />
+                      <div key={i} className="bg-card border border-rule rounded-3xl overflow-hidden animate-pulse">
+                        <div className="h-52 bg-[#e8e2d3]" />
+                        <div className="p-5 space-y-3">
+                          <div className="flex gap-2">
+                            <div className="h-5 w-16 rounded-full bg-[#e8e2d3]" />
+                            <div className="h-5 w-20 rounded-full bg-[#e8e2d3]" />
+                          </div>
+                          <div className="h-5 w-3/4 rounded-full bg-[#e8e2d3]" />
+                          <div className="h-4 w-1/2 rounded-full bg-[#e8e2d3]" />
+                          <div className="h-6 w-1/3 rounded-full bg-[#e8e2d3]" />
+                          <div className="flex gap-3 pt-1">
+                            <div className="h-4 w-14 rounded-full bg-[#e8e2d3]" />
+                            <div className="h-4 w-14 rounded-full bg-[#e8e2d3]" />
+                            <div className="h-4 w-14 rounded-full bg-[#e8e2d3]" />
+                          </div>
+                        </div>
+                      </div>
                     ))
                   ) : paged.length > 0 ? (
                     paged.map((p) => <PropertyGridCard key={p._id} p={p} saved={wishlistIds.includes(p._id)} />)
@@ -380,13 +396,28 @@ export default function Properties() {
               </>
             ) : (
               // MAP VIEW
-              <div className="bg-card border border-rule rounded-3xl overflow-hidden">
+              <div className="bg-card border border-rule rounded-[28px] overflow-hidden shadow-card">
                 <div className="h-[600px] relative">
-                  <PropertiesMap />
-                  <div className="absolute top-5 left-5 bg-card border border-rule rounded-3xl p-5 w-[280px] shadow-card z-[1000]">
-                    <div className="font-eyebrow text-[color:var(--muted)]">Viewing</div>
-                    <div className="font-display text-[26px] mt-1">{clientFiltered.length} homes</div>
-                    <button className="mt-4 w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition">
+                  <PropertiesMap properties={clientFiltered} />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink/10 to-transparent z-20" />
+                  <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-auto bg-card/95 backdrop-blur-xl border border-white/80 rounded-[28px] p-5 w-auto sm:w-[320px] shadow-card-hover z-30">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <div className="font-eyebrow text-[color:var(--muted)]">Map view</div>
+                        <div className="font-display text-[30px] leading-none mt-1">{clientFiltered.length} homes</div>
+                      </div>
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+                        <MapIcon className="w-4 h-4" />
+                      </span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-1.5">
+                      {activePills.length > 0 ? activePills.slice(0, 3).map((p) => (
+                        <span key={p.key} className="inline-flex items-center rounded-full px-3 py-1.5 text-[12px] bg-paper text-ink border border-rule">{p.label}</span>
+                      )) : (
+                        <span className="inline-flex items-center rounded-full px-3 py-1.5 text-[12px] bg-paper text-ink border border-rule">All Indore</span>
+                      )}
+                    </div>
+                    <button className="mt-5 w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition">
                       Save this search
                     </button>
                   </div>

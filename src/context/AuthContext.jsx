@@ -1,5 +1,4 @@
-// src/context/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { jwtDecode } from "jwt-decode";
 
 const AuthContext = createContext();
@@ -8,95 +7,107 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
+function clearStoredAuth() {
+  localStorage.removeItem("user");
+  localStorage.removeItem("token");
+  sessionStorage.removeItem("token");
+}
+
+function normalizeUser(nextUser, prevUser = null) {
+  if (!nextUser) return null;
+
+  const merged = { ...(prevUser || {}), ...nextUser };
+  if (!merged.token && prevUser?.token) merged.token = prevUser.token;
+  if (!merged.token) return merged;
+
+  const decoded = jwtDecode(merged.token);
+  if (decoded.exp * 1000 < Date.now()) return null;
+  return { ...merged, _id: decoded.id };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
+  const [user, setUserState] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ Initialize user on app load
+  const setUser = useCallback((nextUser) => {
+    setUserState((prevUser) => {
+      try {
+        const resolved = typeof nextUser === "function" ? nextUser(prevUser) : nextUser;
+        const normalized = normalizeUser(resolved, prevUser);
+
+        if (!normalized) {
+          clearStoredAuth();
+          return null;
+        }
+
+        localStorage.setItem("user", JSON.stringify(normalized));
+        return normalized;
+      } catch (error) {
+        console.error("Failed to persist user", error);
+        clearStoredAuth();
+        return null;
+      }
+    });
+  }, []);
+
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("user");
+      if (!storedUser) return;
 
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-
-        if (parsedUser.token) {
-          const decoded = jwtDecode(parsedUser.token);
-
-          // 🔒 Check token expiry
-          if (decoded.exp * 1000 < Date.now()) {
-            console.warn("⏰ Token expired. Logging out...");
-            localStorage.removeItem("user");
-            setUser(null);
-          } else {
-            parsedUser._id = decoded.id;
-            setUser(parsedUser);
-          }
-        } else {
-          localStorage.removeItem("user");
-          setUser(null);
-        }
+      const parsedUser = JSON.parse(storedUser);
+      const normalized = normalizeUser(parsedUser);
+      if (!normalized) {
+        clearStoredAuth();
+        return;
       }
-    } catch (e) {
-      console.error("Failed to parse user from localStorage", e);
-      localStorage.removeItem("user");
-      setUser(null);
+
+      setUserState(normalized);
+    } catch (error) {
+      console.error("Failed to parse user from localStorage", error);
+      clearStoredAuth();
+      setUserState(null);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // ✅ Decode + store on login
-  const login = (userData) => {
-    try {
-      if (userData.token) {
-        const decoded = jwtDecode(userData.token);
-
-        // Check expiry at login time too
-        if (decoded.exp * 1000 < Date.now()) {
-          console.warn("Login token already expired");
-          return logout();
-        }
-
-        userData._id = decoded.id;
+  const login = useCallback(
+    (userData) => {
+      try {
+        setUser(userData);
+      } catch (error) {
+        console.error("Failed to decode login token", error);
+        clearStoredAuth();
+        setUserState(null);
       }
+    },
+    [setUser]
+  );
 
-      localStorage.setItem("user", JSON.stringify(userData));
-      setUser(userData);
-    } catch (error) {
-      console.error("Failed to decode login token", error);
-      logout();
-    }
-  };
+  const logout = useCallback(() => {
+    clearStoredAuth();
+    setUserState(null);
+  }, []);
 
-  // ✅ Logout completely
-  const logout = () => {
-    localStorage.removeItem("user");
-    setUser(null);
-  };
-
-  // ⏰ Optional — auto logout check every 5 minutes
   useEffect(() => {
     const interval = setInterval(() => {
       const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          if (parsedUser.token) {
-            const decoded = jwtDecode(parsedUser.token);
-            if (decoded.exp * 1000 < Date.now()) {
-              console.warn("Auto-logout: token expired");
-              logout();
-            }
-          }
-        } catch {
-          logout();
-        }
+      if (!storedUser) return;
+
+      try {
+        const parsedUser = JSON.parse(storedUser);
+        if (!parsedUser.token) return;
+
+        const decoded = jwtDecode(parsedUser.token);
+        if (decoded.exp * 1000 < Date.now()) logout();
+      } catch {
+        logout();
       }
-    }, 5 * 60 * 1000); // every 5 minutes
+    }, 5 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [logout]);
 
   const value = {
     user,

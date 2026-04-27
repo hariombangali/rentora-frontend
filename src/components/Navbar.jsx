@@ -62,16 +62,27 @@ export default function Navbar() {
   };
 
   const isOwner = user?.role === "owner";
+  const showOwnerCtas = !user || isOwner;
+  const accountLinks = [
+    { to: "/profile", label: "Profile" },
+    { to: "/wishlist", label: "Saved" },
+    isOwner
+      ? { to: "/owner", label: "Owner Bookings" }
+      : { to: "/my-bookings", label: "My Bookings" },
+  ];
+
   const navItems = [
     { to: "/", label: "Homes", match: (p) => p === "/" },
     { to: "/properties", label: "Properties", match: (p) => p.startsWith("/properties") },
     isOwner
-      ? { to: "/owner", label: "Dashboard", match: (p) => p.startsWith("/owner") || p.startsWith("/my-properties") }
+      ? { to: "/owner", label: "Dashboard", match: (p) => p === "/owner" || p.startsWith("/owner/") }
       : { to: "/#how-it-works", label: "How it works", match: () => false, hash: true },
-    isOwner
-      ? { to: "/my-properties", label: "Listings", match: (p) => p.startsWith("/my-properties") }
-      : { to: "/postProperty", label: "For owners", match: (p) => p.startsWith("/postProperty") },
-  ];
+    showOwnerCtas && (
+      isOwner
+        ? { to: "/my-properties", label: "Listings", match: (p) => p.startsWith("/my-properties") }
+        : { to: "/postProperty", label: "For owners", match: (p) => p.startsWith("/postProperty") }
+    ),
+  ].filter(Boolean);
 
   const PillNav = ({ onClick }) => (
     <nav className="hidden md:flex items-center gap-1 text-[14px] p-1 rounded-full bg-card border border-rule">
@@ -149,11 +160,7 @@ export default function Navbar() {
           </div>
           <div className="h-px bg-rule" />
           <nav className="py-1">
-            {[
-              { to: "/profile", label: "Profile" },
-              { to: "/wishlist", label: "Saved" },
-              { to: "/my-bookings", label: "My Bookings" },
-            ].map((item) => (
+            {accountLinks.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
@@ -193,12 +200,14 @@ export default function Navbar() {
             {user ? (
               <>
                 <NotificationBell />
-                <Link
-                  to="/postProperty"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
-                >
-                  List a home
-                </Link>
+                {isOwner && (
+                  <Link
+                    to="/postProperty"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
+                  >
+                    List a home
+                  </Link>
+                )}
                 <UserMenu />
               </>
             ) : (
@@ -240,12 +249,14 @@ export default function Navbar() {
         setSearchQuery={setSearchQuery}
         handleLogout={handleLogout}
         NavLinks={MobileNavLinks}
+        accountLinks={accountLinks}
+        isOwner={isOwner}
       />
     </>
   );
 }
 
-function MobileDrawer({ open, onClose, user, displayName, avatarUrl, handleSearch, searchQuery, setSearchQuery, handleLogout, NavLinks }) {
+function MobileDrawer({ open, onClose, user, displayName, avatarUrl, handleSearch, searchQuery, setSearchQuery, handleLogout, NavLinks, accountLinks, isOwner }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[60] flex">
@@ -295,11 +306,9 @@ function MobileDrawer({ open, onClose, user, displayName, avatarUrl, handleSearc
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { to: "/profile", label: "Profile" },
-                  { to: "/wishlist", label: "Saved" },
-                  { to: "/my-bookings", label: "Bookings" },
-                  { to: "/postProperty", label: "List Property" },
-                ].map((item) => (
+                  ...accountLinks,
+                  isOwner && { to: "/postProperty", label: "List Property" },
+                ].filter(Boolean).map((item) => (
                   <Link
                     key={item.to}
                     to={item.to}

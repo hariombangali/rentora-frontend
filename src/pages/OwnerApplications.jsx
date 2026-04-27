@@ -126,9 +126,28 @@ export default function OwnerApplications() {
         </div>
 
         {loading ? (
-          <div className="mt-8 grid gap-4">
+          <div className="mt-8 flex flex-col gap-4">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-36 rounded-3xl bg-card border border-rule animate-pulse" />
+              <div key={i} className="bg-card border border-rule rounded-3xl p-2 grid grid-cols-1 md:grid-cols-[120px_1fr_170px] gap-4 items-center animate-pulse">
+                <div className="h-[96px] rounded-2xl bg-[#e8e2d3]" />
+                <div className="px-3 md:px-0 py-3 space-y-2.5">
+                  <div className="h-5 w-20 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-5 w-3/4 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-4 w-1/2 rounded-full bg-[#e8e2d3]" />
+                  <div className="flex gap-3 pt-1">
+                    <div className="h-3 w-24 rounded-full bg-[#e8e2d3]" />
+                    <div className="h-3 w-16 rounded-full bg-[#e8e2d3]" />
+                    <div className="h-3 w-20 rounded-full bg-[#e8e2d3]" />
+                  </div>
+                </div>
+                <div className="p-4 flex flex-col gap-2">
+                  <div className="h-9 w-full rounded-full bg-[#e8e2d3]" />
+                  <div className="flex gap-2">
+                    <div className="h-9 flex-1 rounded-full bg-[#e8e2d3]" />
+                    <div className="h-9 flex-1 rounded-full bg-[#e8e2d3]" />
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         ) : filtered.length === 0 ? (

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import API from '../services/api';
 import { Link, useNavigate } from 'react-router-dom';
 import PropertiesMap from '../components/PropertiesMap.jsx';
-import FullPageLoader from '../components/FullPageLoader';
+import HomeSkeleton from '../components/HomeSkeleton';
 import { getRecentlyViewed } from '../utils/recentlyViewed';
 import {
   Search,
@@ -194,7 +194,7 @@ export default function Home() {
   };
 
   if (loading && !data.latestProperties.length && !data.featured.length) {
-    return <FullPageLoader message="Loading..." />;
+    return <HomeSkeleton />;
   }
   if (error && !data.latestProperties.length && !data.featured.length) {
     return <div className="p-6 text-center text-red-600">{error}</div>;
@@ -486,20 +486,29 @@ export default function Home() {
             <h2 className="font-display text-[32px] md:text-[44px] mt-2 leading-[1.02]">Find homes near<br />the places you love.</h2>
           </div>
         </div>
-        <div className="bg-card border border-rule rounded-3xl overflow-hidden relative">
+        <div className="bg-card border border-rule rounded-[28px] overflow-hidden relative shadow-card">
           <div className="h-[500px] relative">
             <PropertiesMap />
 
-            <div className="absolute top-5 left-5 bg-card border border-rule rounded-3xl p-5 w-[280px] shadow-card z-[1000]">
-              <div className="font-eyebrow text-[color:var(--muted)]">Viewing</div>
-              <div className="font-display text-[28px] mt-1">{verifiedCount.toLocaleString('en-IN')} homes</div>
-              <div className="flex gap-1.5 flex-wrap mt-3">
-                {['Verified', 'Pet friendly', 'With parking'].map((t) => (
-                  <span key={t} className="inline-flex items-center rounded-full px-3 py-1 text-[12px] bg-[oklch(0.96_0.02_80)] text-ink">{t}</span>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-ink/10 to-transparent z-20" />
+            <div className="absolute top-4 left-4 right-4 sm:top-6 sm:left-6 sm:right-auto bg-card/95 backdrop-blur-xl border border-white/80 rounded-[28px] p-5 w-auto sm:w-[320px] shadow-card-hover z-30">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="font-eyebrow text-[color:var(--muted)]">Live map</div>
+                  <div className="font-display text-[32px] leading-none mt-1">{verifiedCount.toLocaleString('en-IN')} homes</div>
+                </div>
+                <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+                  <MapPin className="w-4 h-4" />
+                </span>
+              </div>
+              <div className="flex gap-1.5 flex-wrap mt-4">
+                {['Verified', 'Pet friendly', 'Parking'].map((t) => (
+                  <span key={t} className="inline-flex items-center rounded-full px-3 py-1.5 text-[12px] bg-paper text-ink border border-rule">{t}</span>
                 ))}
               </div>
               <Link to="/properties" className="w-full mt-5 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition">
                 Open full map
+                <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
           </div>

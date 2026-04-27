@@ -72,5 +72,15 @@ export function useNotifications() {
     } catch (e) { /* ignore */ }
   }, []);
 
-  return { items, unread, loading, fetchList, markOneRead, markAllRead };
+  const removeOne = useCallback(async (id) => {
+    const removed = items.find((n) => n._id === id);
+    setItems((prev) => prev.filter((n) => n._id !== id));
+    if (removed && !removed.read) setUnread((c) => Math.max(0, c - 1));
+    try {
+      const token = localStorage.getItem("token");
+      await API.delete(`/notifications/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    } catch (e) { /* ignore */ }
+  }, [items]);
+
+  return { items, unread, loading, fetchList, markOneRead, markAllRead, removeOne };
 }

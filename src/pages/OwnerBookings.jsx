@@ -310,9 +310,30 @@ export default function OwnerBookings() {
         )}
 
         {loading ? (
-          <div className="mt-8 grid gap-4">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="h-40 rounded-3xl bg-card border border-rule animate-pulse" />
+          <div className="mt-8 flex flex-col gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-card border border-rule rounded-3xl p-5 md:p-6 animate-pulse space-y-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="flex-1 space-y-3">
+                    <div className="flex gap-2">
+                      <div className="h-6 w-20 rounded-full bg-[#e8e2d3]" />
+                      <div className="h-6 w-14 rounded-full bg-[#e8e2d3]" />
+                    </div>
+                    <div className="h-6 w-2/3 rounded-full bg-[#e8e2d3]" />
+                    <div className="h-4 w-1/2 rounded-full bg-[#e8e2d3]" />
+                    <div className="flex gap-6">
+                      <div className="space-y-1"><div className="h-3 w-8 rounded-full bg-[#e8e2d3]" /><div className="h-4 w-20 rounded-full bg-[#e8e2d3]" /></div>
+                      <div className="space-y-1"><div className="h-3 w-8 rounded-full bg-[#e8e2d3]" /><div className="h-4 w-14 rounded-full bg-[#e8e2d3]" /></div>
+                    </div>
+                  </div>
+                  <div className="h-4 w-28 rounded-full bg-[#e8e2d3]" />
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-9 w-24 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-9 w-20 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-9 w-24 rounded-full bg-[#e8e2d3]" />
+                </div>
+              </div>
             ))}
           </div>
         ) : visible.length === 0 ? (

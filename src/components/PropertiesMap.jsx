@@ -1,92 +1,130 @@
-import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import { Link } from 'react-router-dom';
-import L from 'leaflet';
-import API from '../services/api';
+import { useEffect, useMemo, useState } from "react";
+import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from "react-leaflet";
+import { Link } from "react-router-dom";
+import L from "leaflet";
+import API from "../services/api";
 
-// --- FIX FOR BROKEN MARKER ICONS ---
-// This code manually re-imports the default marker icons from the 'leaflet' package.
-// This is the standard fix for the issue where default markers don't appear
-// when using a bundler like Vite or Webpack.
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+const initialPosition = [22.7196, 75.8577];
 
-delete L.Icon.Default.prototype._getIconUrl;
+const compactPrice = (value) => {
+  const price = Number(value) || 0;
+  if (price >= 100000) {
+    const lakhs = price / 100000;
+    return `Rs ${lakhs % 1 === 0 ? lakhs.toFixed(0) : lakhs.toFixed(1)}L`;
+  }
+  if (price >= 1000) return `Rs ${Math.round(price / 1000)}k`;
+  return `Rs ${price.toLocaleString("en-IN")}`;
+};
 
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
+const createPriceIcon = (label) =>
+  L.divIcon({
+    className: "rentora-price-marker-wrap",
+    html: `
+      <div class="rentora-price-marker">
+        <div class="rentora-price-marker__pill">${label}</div>
+        <div class="rentora-price-marker__dot"></div>
+      </div>
+    `,
+    iconSize: [84, 46],
+    iconAnchor: [42, 42],
+    popupAnchor: [0, -40],
+  });
 
+const imageFor = (property) => {
+  const image = property.images?.[0];
+  if (!image) return "/default-property.jpg";
+  if (/^https?:\/\//i.test(image) || image.startsWith("/")) return image;
 
+  const assetBase = (API.defaults.baseURL || "").replace(/\/api\/?$/, "");
+  return `${assetBase}/uploads/${image}`;
+};
 
-export default function PropertiesMap() {
-  const [properties, setProperties] = useState([]);
+const normalizeProperty = (property) => {
+  const coords = property.location?.coordinates || property.location?.point?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+
+  const lng = Number(coords[0]);
+  const lat = Number(coords[1]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return {
+    ...property,
+    lat,
+    lng,
+    locationLabel: [property.location?.locality, property.location?.city].filter(Boolean).join(", ") || "Indore",
+  };
+};
+
+export default function PropertiesMap({ properties: providedProperties, className = "" }) {
+  const [fetchedProperties, setFetchedProperties] = useState([]);
 
   useEffect(() => {
+    if (providedProperties) return;
+
     const fetchPropertiesForMap = async () => {
       try {
-        const res = await API.get('/properties/map-locations');
-        setProperties(res.data);
+        const res = await API.get("/properties/map-locations");
+        setFetchedProperties(res.data);
       } catch (error) {
         console.error("Failed to fetch properties for map:", error);
       }
     };
+
     fetchPropertiesForMap();
-  }, []);
+  }, [providedProperties]);
 
-  
-
-  // Set the initial map position (e.g., center of Indore)
-  const initialPosition = [22.7196, 75.8577];
-
-  return (
-    <MapContainer center={initialPosition} zoom={12} style={{ height: '100%', width: '100%' }}>
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      
-{properties.map((property) => {
-  const coords = property.location?.coordinates;
-  if (!coords || coords.length < 2) return null; // Skip if invalid
-
-  const lat = coords[1];
-  const lng = coords[0];
-
-  // Extra safety: ensure they are numbers
-  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  const mapProperties = useMemo(() => {
+    const source = providedProperties || fetchedProperties;
+    return (source || [])
+      .map(normalizeProperty)
+      .filter(Boolean)
+      .map((property) => ({
+        ...property,
+        icon: createPriceIcon(compactPrice(property.price)),
+      }));
+  }, [providedProperties, fetchedProperties]);
 
   return (
-    <Marker
-      key={property._id}
-      position={[lat, lng]}
+    <MapContainer
+      center={initialPosition}
+      zoom={12}
+      minZoom={11}
+      maxZoom={17}
+      zoomControl={false}
+      scrollWheelZoom={false}
+      className={`rentora-map ${className}`}
+      style={{ height: "100%", width: "100%" }}
     >
-      <Popup>
-        <div className="w-48">
-          <img 
-            src={property.images?.[0] 
-              ? `${API.defaults.baseURL.replace('/api', '')}/uploads/${property.images[0]}`
-              : '/default-property.jpg'
-            }
-            alt={property.title}
-            className="w-full h-24 object-cover rounded-md mb-2"
-          />
-          <h4 className="font-bold text-md mb-1 line-clamp-1">{property.title}</h4>
-          <p className="text-sm text-gray-700 mb-2">
-            {`₹${property.price.toLocaleString('en-IN')}/mo`}
-          </p>
-          <Link to={`/properties/${property._id}`} className="text-blue-600 font-semibold hover:underline">
-            View Details →
-          </Link>
-        </div>
-      </Popup>
-    </Marker>
-  );
-})}
+      <ZoomControl position="bottomright" />
+      <TileLayer
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      />
 
+      {mapProperties.map((property) => (
+        <Marker
+          key={property._id}
+          position={[property.lat, property.lng]}
+          icon={property.icon}
+          riseOnHover
+        >
+          <Popup className="rentora-map-popup" maxWidth={260}>
+            <div className="rentora-popup-card">
+              <img src={imageFor(property)} alt={property.title} className="rentora-popup-card__image" />
+              <div className="rentora-popup-card__body">
+                <div className="rentora-popup-card__meta">{property.locationLabel}</div>
+                <h4 className="rentora-popup-card__title">{property.title}</h4>
+                <div className="rentora-popup-card__footer">
+                  <span className="rentora-popup-card__price">{compactPrice(property.price)}/mo</span>
+                  <Link to={`/properties/${property._id}`} className="rentora-popup-card__link">
+                    View
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </Popup>
+        </Marker>
+      ))}
     </MapContainer>
   );
 }

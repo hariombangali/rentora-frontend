@@ -1,7 +1,8 @@
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import API from "../services/api";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import { MapContainer, Marker, Popup, TileLayer, ZoomControl } from "react-leaflet";
+import L from "leaflet";
 import {
   BedDouble,
   Bath,
@@ -9,6 +10,7 @@ import {
   CalendarDays,
   Phone,
   Mail,
+  MapPin,
   Heart,
   Share2,
   Shield,
@@ -22,7 +24,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import FullPageLoader from "../components/FullPageLoader";
+import PropertyDetailsSkeleton from "../components/PropertyDetailsSkeleton";
 import { toast } from "../utils/toast";
 import { trackView } from "../utils/recentlyViewed";
 import RentalApplicationModal from "../components/RentalApplicationModal";
@@ -31,6 +33,16 @@ import HomePropertyCard from "../components/HomePropertyCard";
 const fmtINR = (n) => (n == null ? "N/A" : "₹" + Number(n).toLocaleString("en-IN"));
 const fmtDate = (d) =>
   !d ? "—" : new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+const compactMapPrice = (value) => {
+  const price = Number(value) || 0;
+  if (price >= 100000) {
+    const lakhs = price / 100000;
+    return `Rs ${lakhs % 1 === 0 ? lakhs.toFixed(0) : lakhs.toFixed(1)}L`;
+  }
+  if (price >= 1000) return `Rs ${Math.round(price / 1000)}k`;
+  return `Rs ${price.toLocaleString("en-IN")}`;
+};
+
 const daysAgo = (d) => {
   if (!d) return "recently";
   const diff = Math.round((Date.now() - new Date(d).getTime()) / (24 * 3600 * 1000));
@@ -300,7 +312,7 @@ export default function PropertyDetails() {
     }
   };
 
-  if (loading) return <FullPageLoader message="Loading..." />;
+  if (loading) return <PropertyDetailsSkeleton />;
   if (error || !property) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center bg-paper">
@@ -329,6 +341,23 @@ export default function PropertyDetails() {
     property.location.point.coordinates.length === 2 &&
     typeof property.location.point.coordinates[0] === "number" &&
     typeof property.location.point.coordinates[1] === "number";
+  const mapCenter = hasCoords
+    ? [property.location.point.coordinates[1], property.location.point.coordinates[0]]
+    : null;
+  const detailMapIcon = hasCoords
+    ? L.divIcon({
+        className: "rentora-price-marker-wrap",
+        html: `
+          <div class="rentora-price-marker">
+            <div class="rentora-price-marker__pill">${compactMapPrice(property.price)}</div>
+            <div class="rentora-price-marker__dot"></div>
+          </div>
+        `,
+        iconSize: [84, 46],
+        iconAnchor: [42, 42],
+        popupAnchor: [0, -40],
+      })
+    : null;
 
   const isOwner = user && property?.user && user._id === property.user._id;
   const ownerName = property.user?.ownerKYC?.ownerName || property.user?.name || "Owner";
@@ -484,19 +513,62 @@ export default function PropertyDetails() {
             {/* Neighbourhood */}
             <section className="mt-10">
               <h2 className="font-display text-[28px] md:text-[32px]">The neighbourhood</h2>
-              <div className="mt-5 bg-card border border-rule rounded-3xl overflow-hidden">
-                <div className="h-[340px] bg-[oklch(0.96_0.02_120)] relative">
+              <div className="mt-5 bg-card border border-rule rounded-[28px] overflow-hidden shadow-card">
+                <div className="h-[380px] bg-[oklch(0.96_0.02_120)] relative">
                   {hasCoords ? (
-                    <MapContainer
-                      center={[property.location.point.coordinates[1], property.location.point.coordinates[0]]}
-                      zoom={15}
-                      className="h-full w-full"
-                    >
-                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                      <Marker position={[property.location.point.coordinates[1], property.location.point.coordinates[0]]}>
-                        <Popup>{property.title}<br />{address}</Popup>
-                      </Marker>
-                    </MapContainer>
+                    <>
+                      <MapContainer
+                        center={mapCenter}
+                        zoom={15}
+                        minZoom={12}
+                        maxZoom={18}
+                        zoomControl={false}
+                        scrollWheelZoom={false}
+                        className="rentora-map h-full w-full"
+                      >
+                        <ZoomControl position="bottomright" />
+                        <TileLayer
+                          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                        />
+                        <Marker position={mapCenter} icon={detailMapIcon} riseOnHover>
+                          <Popup className="rentora-map-popup" maxWidth={260}>
+                            <div className="rentora-popup-card">
+                              <div className="rentora-popup-card__body">
+                                <div className="rentora-popup-card__meta">{locality || city}</div>
+                                <h4 className="rentora-popup-card__title">{property.title}</h4>
+                                <div className="rentora-popup-card__footer">
+                                  <span className="rentora-popup-card__price">{compactMapPrice(property.price)}/mo</span>
+                                  <Link to={`/properties/${property._id}`} className="rentora-popup-card__link">
+                                    View
+                                  </Link>
+                                </div>
+                              </div>
+                            </div>
+                          </Popup>
+                        </Marker>
+                      </MapContainer>
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink/10 to-transparent z-20" />
+                      <div className="absolute top-4 left-4 right-4 sm:top-5 sm:left-5 sm:right-auto bg-card/95 backdrop-blur-xl border border-white/80 rounded-[24px] p-4 w-auto sm:w-[300px] shadow-card-hover z-30">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-eyebrow text-[color:var(--muted)]">Exact area</div>
+                            <div className="font-display text-[24px] leading-none mt-1 truncate">{locality || city}</div>
+                          </div>
+                          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent">
+                            <MapPin className="w-4 h-4" />
+                          </span>
+                        </div>
+                        <p className="mt-3 text-[13px] leading-relaxed text-[color:var(--muted)] line-clamp-2">{address}</p>
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {["Verified location", `${compactMapPrice(property.price)}/mo`].map((item) => (
+                            <span key={item} className="inline-flex items-center rounded-full px-3 py-1.5 text-[12px] bg-paper text-ink border border-rule">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[color:var(--muted)]">Map unavailable</div>
                   )}

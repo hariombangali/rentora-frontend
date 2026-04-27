@@ -27,6 +27,7 @@ export default function Inbox() {
   const [loadingConvs, setLoadingConvs] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [sending, setSending] = useState(false);
+  const [convStats, setConvStats] = useState({ count: 0, unread: 0 });
   const [query, setQuery] = useState("");
   const [partnerTyping, setPartnerTyping] = useState(false);
   const location = useLocation();
@@ -112,16 +113,25 @@ export default function Inbox() {
       try {
         setLoadingConvs(true);
         const token = localStorage.getItem("token");
-        const res = await API.get("/messages/conversations", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const data = Array.isArray(res.data) ? res.data : (res.data?.conversations ?? []);
+        const [listRes, countRes] = await Promise.all([
+          API.get("/messages/conversations", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          API.get("/messages/conversations/count", {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+        const data = Array.isArray(listRes.data) ? listRes.data : (listRes.data?.conversations ?? []);
         if (initialConversation) {
           const listKeys = new Set(data.map(convKeyOf));
           const initKey = convKeyOf(initialConversation);
           if (initKey && !listKeys.has(initKey)) data.unshift(initialConversation);
         }
         setConversations(data);
+        setConvStats({
+          count: Number(countRes.data?.count) || data.length,
+          unread: Number(countRes.data?.unread) || 0,
+        });
         if (initialConversation) setSelectedConversation(initialConversation);
       } catch (err) {
         console.error("Failed to load conversations", err);
@@ -266,7 +276,11 @@ export default function Inbox() {
         {/* Sidebar header */}
         <div className="px-5 pt-6 pb-4 border-b border-rule">
           <h2 className="font-display text-2xl text-ink tracking-tight">Inbox</h2>
-          <p className="font-eyebrow text-muted mt-0.5">Messages</p>
+          <p className="font-eyebrow text-muted mt-0.5">
+            {convStats.unread > 0
+              ? `${convStats.unread} unread across ${convStats.count} conversations`
+              : "Messages"}
+          </p>
 
           {/* Search */}
           <div className="relative mt-4">
@@ -296,14 +310,16 @@ export default function Inbox() {
         {/* Conversation list */}
         <div className="flex-1 overflow-y-auto scrollbar-hide">
           {loadingConvs ? (
-            /* Skeleton rows */
-            [...Array(6)].map((_, i) => (
+            [...Array(7)].map((_, i) => (
               <div key={i} className="flex items-start gap-3 px-4 py-4 border-b border-rule animate-pulse">
-                <div className="w-10 h-10 rounded-full bg-rule flex-shrink-0" />
+                <div className="w-10 h-10 rounded-full bg-[#e8e2d3] flex-shrink-0" />
                 <div className="flex-1 min-w-0 space-y-2 pt-0.5">
-                  <div className="h-3.5 w-28 bg-rule rounded-full" />
-                  <div className="h-2.5 w-20 bg-rule/70 rounded-full" />
-                  <div className="h-2.5 w-36 bg-rule/50 rounded-full" />
+                  <div className="flex justify-between">
+                    <div className="h-3.5 w-28 bg-[#e8e2d3] rounded-full" />
+                    <div className="h-3 w-10 bg-[#e8e2d3] rounded-full" />
+                  </div>
+                  <div className="h-2.5 w-3/4 bg-[#e8e2d3] rounded-full" />
+                  <div className="h-2.5 w-1/2 bg-[#e8e2d3] rounded-full" />
                 </div>
               </div>
             ))
@@ -427,15 +443,14 @@ export default function Inbox() {
               className="flex-1 overflow-y-auto px-5 py-6 space-y-3 bg-paper/40 scrollbar-hide"
             >
               {loadingMsgs ? (
-                /* Skeleton bubbles */
                 [...Array(7)].map((_, i) => (
                   <div
                     key={i}
                     className={`flex items-end gap-2 animate-pulse ${i % 2 ? "justify-end" : "justify-start"}`}
                   >
-                    {!(i % 2) && <div className="w-7 h-7 rounded-full bg-rule flex-shrink-0" />}
+                    {!(i % 2) && <div className="w-7 h-7 rounded-full bg-[#e8e2d3] flex-shrink-0" />}
                     <div
-                      className={`h-12 rounded-2xl bg-rule ${i % 2 ? "w-48" : "w-56"}`}
+                      className={`rounded-2xl bg-[#e8e2d3] ${i % 2 ? "w-44 h-10" : "w-56 h-12"}`}
                       style={{ maxWidth: "65%" }}
                     />
                   </div>

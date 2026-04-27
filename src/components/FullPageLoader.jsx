@@ -1,10 +1,15 @@
-import { ArrowPathIcon } from "@heroicons/react/24/outline";
-
-export default function FullPageLoader({ message = "Loading..." }) {
+export default function FullPageLoader() {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
-      <ArrowPathIcon className="h-14 w-14 animate-spin text-blue-600" />
-      <p className="mt-4 text-lg font-semibold text-blue-800">{message}</p>
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-paper">
+      <div className="flex gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="w-2 h-2 rounded-full bg-accent animate-bounce"
+            style={{ animationDelay: `${i * 0.15}s` }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

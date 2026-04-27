@@ -70,6 +70,25 @@ export default function OwnerDashboard() {
             : `You have ${counts.pendingApps + counts.pendingVisits + counts.openIssues} item${counts.pendingApps + counts.pendingVisits + counts.openIssues === 1 ? "" : "s"} that need your attention.`}
         </p>
 
+        {loading ? (
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-card border border-rule rounded-3xl p-6 animate-pulse flex flex-col gap-4">
+                <div className="flex items-start justify-between">
+                  <div className="w-11 h-11 rounded-2xl bg-[#e8e2d3]" />
+                  <div className="h-7 w-16 rounded-full bg-[#e8e2d3]" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-6 w-28 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-4 w-full rounded-full bg-[#e8e2d3]" />
+                  <div className="h-4 w-3/4 rounded-full bg-[#e8e2d3]" />
+                </div>
+                <div className="h-4 w-16 rounded-full bg-[#e8e2d3] mt-auto" />
+              </div>
+            ))}
+          </div>
+        ) : (
+        <>
         <div className="mt-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <DashCard
             to="/owner/applications"
@@ -130,6 +149,8 @@ export default function OwnerDashboard() {
             <Plus className="w-4 h-4" /> List a home
           </Link>
         </div>
+        </>
+        )}
       </div>
     </div>
   );
@@ -147,9 +168,7 @@ function DashCard({ to, icon, title, subtitle, badge, total, loading, emphasis, 
         <div className="w-11 h-11 rounded-2xl bg-[oklch(0.96_0.02_80)] text-accent flex items-center justify-center">
           {icon}
         </div>
-        {loading ? (
-          <div className="h-7 w-12 rounded-full bg-rule animate-pulse" />
-        ) : badge > 0 ? (
+        {badge > 0 ? (
           <span className="inline-flex items-center px-3 py-1 rounded-full bg-accent text-paper text-[12px] font-medium">
             {badge} new
           </span>

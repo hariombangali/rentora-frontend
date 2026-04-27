@@ -1,4 +1,11 @@
+import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  return null;
+}
 import { Toaster } from "sonner";
 import { useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
@@ -37,6 +44,7 @@ function App() {
     return (
       <BrowserRouter>
         <Toaster richColors position="top-right" />
+        <ScrollToTop />
         <Routes>
           <Route
             path="/admin/*"
@@ -72,10 +80,12 @@ function App() {
 
 function PublicLayout() {
   const location = useLocation();
+  const { user } = useAuth();
   const isAuthRoute = location.pathname === "/login";
 
   return (
     <div className="min-h-screen flex flex-col">
+      <ScrollToTop />
       {!isAuthRoute && <Navbar />}
       <main className="flex-grow">
         <Routes>
@@ -83,10 +93,35 @@ function PublicLayout() {
             <Route path="/properties" element={<Properties />} />
             <Route path="/properties/:id" element={<PropertyDetails />} />
             <Route path="/about" element={<About />} />
-            <Route path="/profile" element={<ProfilePage />} />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <ProfilePage />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/login" element={<Login />} />
-            <Route path="/inbox" element={<Inbox />} />
-            <Route path="/my-bookings" element={<MyBookings />} />
+            <Route
+              path="/inbox"
+              element={
+                <ProtectedRoute>
+                  <Inbox />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/my-bookings"
+              element={
+                user?.role === "owner" ? (
+                  <Navigate to="/owner" replace />
+                ) : (
+                  <ProtectedRoute>
+                    <MyBookings />
+                  </ProtectedRoute>
+                )
+              }
+            />
             <Route
               path="/owner"
               element={
@@ -119,7 +154,14 @@ function PublicLayout() {
                 </RoleGuard>
               }
             />
-            <Route path="/wishlist" element={<Wishlist />} />
+            <Route
+              path="/wishlist"
+              element={
+                <ProtectedRoute>
+                  <Wishlist />
+                </ProtectedRoute>
+              }
+            />
             {/* <Route path="/wishlist" element={<TopArea />} /> */}
 
 

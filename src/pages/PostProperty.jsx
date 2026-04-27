@@ -102,7 +102,7 @@ function Section({ eyebrow, children }) {
 
 export default function PostProperty() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const { id } = useParams();
   const isEdit = Boolean(id);
 
@@ -303,7 +303,10 @@ export default function PostProperty() {
           : await API.post(`/properties`, data, { headers });
 
         if (!isEdit && res.status === 201 && user?.role !== "owner") {
-          await API.put(`/auth/upgrade-role`, { role: "owner" }, { headers });
+          const roleRes = await API.put(`/auth/upgrade-role`, { role: "owner" }, { headers });
+          const updatedUser = { ...user, role: roleRes.data?.role || "owner" };
+          localStorage.setItem("user", JSON.stringify(updatedUser));
+          setUser(updatedUser);
         }
 
         navigate("/my-properties", {
@@ -316,7 +319,7 @@ export default function PostProperty() {
         setUploading(false);
       }
     },
-    [formData, totalSteps, existingImages, isEdit, id, navigate, user?.role, validateStep, STEPS]
+    [formData, totalSteps, existingImages, isEdit, id, navigate, setUser, user, user?.role, validateStep, STEPS]
   );
 
   const minDate = useMemo(() => new Date().toISOString().split("T"), []);

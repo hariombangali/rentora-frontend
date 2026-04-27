@@ -2,15 +2,19 @@ import { useEffect, useState } from "react";
 import API from "../../services/api";
 import { Link } from "react-router-dom";
 import {
-  ArrowPathIcon,
-  HomeIcon,
-  ClockIcon,
-  UserGroupIcon,
-  UserIcon,
-  CurrencyRupeeIcon,
-  DocumentCheckIcon, 
-  ChartBarSquareIcon,
-} from "@heroicons/react/24/outline";
+  RefreshCw,
+  Home as HomeIcon,
+  Clock,
+  Users,
+  User,
+  IndianRupee,
+  ShieldCheck,
+  CheckCircle,
+  ArrowRight,
+  Search,
+  ListChecks,
+  BarChart3,
+} from "lucide-react";
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -22,8 +26,7 @@ export default function Dashboard() {
     availableProperties: 0,
     ownersPendingKYC: 0,
   });
-
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const fetchStats = async () => {
@@ -42,123 +45,115 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  useEffect(() => { fetchStats(); }, []);
+
+  const fmtNumber = (n) => (n ?? 0).toLocaleString("en-IN");
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-4xl font-extrabold text-blue-900 tracking-wide">Admin Dashboard</h1>
+    <div className="max-w-[1200px] mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
+        <div>
+          <p className="font-eyebrow text-[11px] text-[color:var(--muted)]">Overview</p>
+          <h1 className="font-display text-[36px] md:text-[44px] leading-tight mt-1 text-ink">Admin Dashboard</h1>
+          <p className="mt-2 text-[14px] text-[color:var(--muted)]">A bird&rsquo;s-eye view of the marketplace.</p>
+        </div>
         <button
           onClick={fetchStats}
           disabled={loading}
-          className={`inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-white font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50`}
+          className="inline-flex items-center gap-2 rounded-full bg-card border border-rule px-5 py-2.5 text-[13px] font-medium text-ink hover:border-ink transition disabled:opacity-60 self-start sm:self-auto"
         >
-          <ArrowPathIcon className="h-5 w-5 animate-spin" style={{ display: loading ? "inline" : "none" }} />
-          {!loading && "Refresh"}
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
         </button>
       </div>
 
       {error && (
-        <div className="mb-6 rounded bg-red-100 p-4 text-red-700 font-semibold text-center">{error}</div>
+        <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      {/* Stats Grid */}
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 mb-10">
-        <StatCard
-          icon={<HomeIcon className="h-10 w-10 text-blue-200" />}
-          label="Total Properties"
-          value={stats.totalProperties}
-          colorClass="from-blue-500 to-blue-700"
-        />
-        <StatCard
-          icon={<ClockIcon className="h-10 w-10 text-yellow-200" />}
-          label="Pending Approvals"
-          value={stats.pendingApprovals}
-          colorClass="from-yellow-400 to-yellow-600"
-        />
-        <StatCard
-          icon={<UserGroupIcon className="h-10 w-10 text-green-200" />}
-          label="Owners"
-          value={stats.owners}
-          colorClass="from-green-500 to-green-700"
-        />
-        <StatCard
-          icon={<UserIcon className="h-10 w-10 text-purple-200" />}
-          label="Users"
-          value={stats.users}
-          colorClass="from-purple-500 to-purple-700"
-        />
-        <StatCard
-          icon={<CurrencyRupeeIcon className="h-10 w-10 text-indigo-200" />}
-          label="Total Deposits (₹)"
-          value={stats.totalDeposit}
-          colorClass="from-indigo-500 to-indigo-700"
-        />
-        <StatCard
-          icon={<DocumentCheckIcon className="h-10 w-10 text-red-200" />}
-          label="Owners Pending KYC"
-          value={stats.ownersPendingKYC}
-          colorClass="from-red-400 to-red-600"
-        />
-        <StatCard
-          icon={<ClockIcon className="h-10 w-10 text-teal-200" />}
-          label="Available Properties"
-          value={stats.availableProperties}
-          colorClass="from-teal-500 to-teal-700"
-        />
+      {/* Stats grid */}
+      <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-10">
+        {loading ? (
+          [...Array(7)].map((_, i) => (
+            <div key={i} className="rounded-3xl border border-rule bg-card p-6 animate-pulse space-y-3">
+              <div className="w-11 h-11 rounded-2xl bg-[#e8e2d3]" />
+              <div className="h-7 w-20 rounded-full bg-[#e8e2d3]" />
+              <div className="h-3 w-24 rounded-full bg-[#e8e2d3]" />
+            </div>
+          ))
+        ) : (
+          <>
+            <StatCard icon={HomeIcon} label="Total properties" value={fmtNumber(stats.totalProperties)} />
+            <StatCard icon={Clock} label="Pending approvals" value={fmtNumber(stats.pendingApprovals)} accent={stats.pendingApprovals > 0} />
+            <StatCard icon={Users} label="Owners" value={fmtNumber(stats.owners)} />
+            <StatCard icon={User} label="Users" value={fmtNumber(stats.users)} />
+            <StatCard icon={IndianRupee} label="Total deposits" value={`₹${fmtNumber(stats.totalDeposit)}`} />
+            <StatCard icon={ShieldCheck} label="KYC pending" value={fmtNumber(stats.ownersPendingKYC)} accent={stats.ownersPendingKYC > 0} />
+            <StatCard icon={CheckCircle} label="Available" value={fmtNumber(stats.availableProperties)} />
+          </>
+        )}
       </section>
 
-      {/* Quick Links */}
-      <section>
-        <h2 className="mb-4 text-2xl font-semibold text-gray-700">Quick Links</h2>
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <QuickLink title="Review Pending Properties" to="/admin/pending-approvals" icon="🔍" />
-          <QuickLink title="All Properties" to="/admin/all-properties" icon="📋" />
-          <QuickLink title="Manage Users" to="/admin/users" icon="👥" />
-          <QuickLink title="Analytics" to="/admin/analytics" icon="📊" />
-          {/* Add more as needed */}
+      {/* Quick actions */}
+      <section className="mb-10">
+        <p className="font-eyebrow text-[11px] text-[color:var(--muted)] mb-3">Quick actions</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <QuickLink to="/admin/pending-approvals" icon={Search} title="Review pending" subtitle="Approve or reject new listings" />
+          <QuickLink to="/admin/all-properties" icon={ListChecks} title="All properties" subtitle="Manage every listing" />
+          <QuickLink to="/admin/users" icon={Users} title="Manage users" subtitle="Roles, status, and access" />
+          <QuickLink to="/admin/analytics" icon={BarChart3} title="Analytics" subtitle="Trends and growth metrics" />
         </div>
       </section>
 
-      {/* Analytics Placeholder */}
-      <section className="mt-12">
-        <div className="rounded-xl bg-white p-6 shadow-xl text-center text-gray-500">
-          <ChartBarSquareIcon className="mx-auto mb-4 h-16 w-16 text-gray-300" />
-          <p className="text-xl font-semibold">Analytics coming soon</p>
-          <p className="mt-2 max-w-md mx-auto">
-            Visualize property trends, user growth, and other key metrics here using charts.
+      {/* Footer banner */}
+      <div className="rounded-3xl border border-rule bg-card p-8 md:p-10 flex flex-col md:flex-row items-start md:items-center gap-5 justify-between">
+        <div>
+          <p className="font-eyebrow text-accent text-[11px]">Insights</p>
+          <h3 className="font-display text-[24px] mt-1 text-ink">Detailed analytics</h3>
+          <p className="text-[14px] text-[color:var(--muted)] mt-1 max-w-md">
+            Visualize property trends, user growth, and KYC progress in one place.
           </p>
         </div>
-      </section>
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value, colorClass }) {
-  return (
-    <div
-      className={`rounded-xl bg-gradient-to-br ${colorClass} shadow-lg p-6 flex items-center space-x-4 cursor-default`}
-      title={`${label}: ${value}`}
-    >
-      <div className="p-4 rounded-lg bg-white bg-opacity-20">{icon}</div>
-      <div>
-        <p className="text-3xl font-extrabold text-white">{value ?? 0}</p>
-        <p className="text-sm text-white/90">{label}</p>
+        <Link
+          to="/admin/analytics"
+          className="inline-flex items-center gap-2 px-5 py-3 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition"
+        >
+          Open analytics <ArrowRight className="w-4 h-4" />
+        </Link>
       </div>
     </div>
   );
 }
 
-function QuickLink({ title, to, icon }) {
+function StatCard({ icon: Icon, label, value, accent }) {
+  return (
+    <div className={`rounded-3xl border bg-card p-6 transition hover:-translate-y-0.5 hover:shadow-card-hover ${accent ? "border-accent/40" : "border-rule"}`}>
+      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${accent ? "bg-accent/10 text-accent" : "bg-paper text-ink"}`}>
+        <Icon className="w-5 h-5" strokeWidth={1.75} />
+      </div>
+      <div className="mt-4 font-display text-[28px] leading-none text-ink">{value}</div>
+      <div className="mt-1.5 text-[13px] text-[color:var(--muted)]">{label}</div>
+    </div>
+  );
+}
+
+function QuickLink({ to, icon: Icon, title, subtitle }) {
   return (
     <Link
       to={to}
-      className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-blue-800 shadow-md hover:bg-blue-100 transition"
+      className="group rounded-3xl border border-rule bg-card p-5 transition hover:-translate-y-0.5 hover:shadow-card-hover flex flex-col gap-3"
     >
-      <span className="text-2xl">{icon}</span>
-      <span className="font-semibold tracking-wide">{title}</span>
+      <div className="w-10 h-10 rounded-2xl bg-paper text-ink flex items-center justify-center">
+        <Icon className="w-[18px] h-[18px]" strokeWidth={1.75} />
+      </div>
+      <div>
+        <div className="font-medium text-[15px] text-ink">{title}</div>
+        <div className="text-[12px] text-[color:var(--muted)] mt-0.5">{subtitle}</div>
+      </div>
+      <div className="mt-auto inline-flex items-center gap-1.5 text-[13px] font-medium text-ink">
+        Open <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
+      </div>
     </Link>
   );
 }

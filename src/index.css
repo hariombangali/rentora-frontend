@@ -4,6 +4,16 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @layer base {
   :root {
     --ink: #1F2420;
@@ -80,4 +90,187 @@
   @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full
     border border-rule text-ink font-medium text-sm transition
     hover:bg-ink hover:text-paper active:scale-[0.97];
+}
+
+/* Leaflet map polish */
+.rentora-map {
+  background: #ece6d9;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.leaflet-container {
+  z-index: 0;
+}
+
+.rentora-map .leaflet-tile-pane {
+  filter: saturate(0.9) contrast(0.98) sepia(0.08);
+}
+
+.rentora-map .leaflet-control-zoom {
+  border: 1px solid var(--rule);
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(31, 36, 32, 0.14);
+  overflow: hidden;
+}
+
+.rentora-map .leaflet-control-zoom a {
+  width: 38px;
+  height: 38px;
+  line-height: 38px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.rentora-map .leaflet-control-zoom a:last-child {
+  border-bottom: 0;
+}
+
+.rentora-map .leaflet-control-zoom a:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.rentora-map .leaflet-control-attribution {
+  border-top-left-radius: 12px;
+  background: rgba(255, 255, 255, 0.84);
+  color: rgba(31, 36, 32, 0.64);
+  font-size: 10px;
+  padding: 3px 8px;
+}
+
+.rentora-price-marker-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.rentora-price-marker {
+  width: 84px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.rentora-price-marker__pill {
+  max-width: 84px;
+  padding: 7px 10px;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 10px 24px rgba(31, 36, 32, 0.22);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+  transform: translateY(0);
+  transition: transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.rentora-price-marker__dot {
+  width: 10px;
+  height: 10px;
+  margin-top: -1px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 6px 14px rgba(31, 36, 32, 0.2);
+}
+
+.rentora-price-marker-wrap:hover .rentora-price-marker__pill {
+  background: var(--accent);
+  box-shadow: 0 14px 28px rgba(31, 36, 32, 0.26);
+  transform: translateY(-2px);
+}
+
+.rentora-map-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 22px;
+  box-shadow: 0 18px 45px rgba(31, 36, 32, 0.2);
+  overflow: hidden;
+}
+
+.rentora-map-popup .leaflet-popup-content {
+  width: 240px !important;
+  margin: 0;
+}
+
+.rentora-map-popup .leaflet-popup-tip {
+  border: 1px solid var(--rule);
+  box-shadow: 0 10px 24px rgba(31, 36, 32, 0.14);
+}
+
+.rentora-popup-card {
+  overflow: hidden;
+  background: var(--card);
+}
+
+.rentora-popup-card__image {
+  width: 100%;
+  height: 122px;
+  object-fit: cover;
+  display: block;
+}
+
+.rentora-popup-card__body {
+  padding: 13px;
+}
+
+.rentora-popup-card__meta {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rentora-popup-card__title {
+  margin-top: 5px;
+  color: var(--ink);
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 18px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.rentora-popup-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.rentora-popup-card__price {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rentora-popup-card__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 160ms ease;
+}
+
+.rentora-popup-card__link:hover {
+  background: var(--accent);
 }

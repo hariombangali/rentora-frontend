@@ -3,6 +3,7 @@ import API from "../../services/api";
 import { toast } from "../../utils/toast";
 import ConfirmModal from "../../components/ConfirmModal";
 import Pagination from "../../components/Pagination";
+import { Search, X, Eye, Check, Star, Trash2, Inbox } from "lucide-react";
 
 export default function AllProperties() {
   const [properties, setProperties] = useState([]);
@@ -28,12 +29,8 @@ export default function AllProperties() {
       if (statusFilter) params.set("status", statusFilter);
       const res = await API.get(`/admin/all-properties?${params}`, authHeader);
       const data = res.data;
-      if (Array.isArray(data)) {
-        setProperties(data);
-      } else {
-        setProperties(data.properties || []);
-        setTotalPages(data.pages || 1);
-      }
+      if (Array.isArray(data)) setProperties(data);
+      else { setProperties(data.properties || []); setTotalPages(data.pages || 1); }
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to load properties");
     } finally {
@@ -43,11 +40,7 @@ export default function AllProperties() {
 
   useEffect(() => { fetchProps(page); }, [page, statusFilter]);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setPage(1);
-    fetchProps(1);
-  };
+  const handleSearch = (e) => { e.preventDefault(); setPage(1); fetchProps(1); };
 
   const setProcessing = (id, state) =>
     setProcessingIds((prev) => { const s = new Set(prev); state ? s.add(id) : s.delete(id); return s; });
@@ -60,9 +53,7 @@ export default function AllProperties() {
       toast.success("Property approved");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to approve");
-    } finally {
-      setProcessing(id, false);
-    }
+    } finally { setProcessing(id, false); }
   };
 
   const submitReject = async () => {
@@ -77,10 +68,7 @@ export default function AllProperties() {
       toast.success("Property rejected");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to reject");
-    } finally {
-      setProcessing(id, false);
-      setRejectReason("");
-    }
+    } finally { setProcessing(id, false); setRejectReason(""); }
   };
 
   const deleteProperty = async (id) => {
@@ -93,9 +81,7 @@ export default function AllProperties() {
       toast.success("Property deleted");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to delete");
-    } finally {
-      setProcessing(id, false);
-    }
+    } finally { setProcessing(id, false); }
   };
 
   const toggleFeatured = async (id, currentFeatured, isApproved) => {
@@ -108,23 +94,26 @@ export default function AllProperties() {
       toast.success(!currentFeatured ? "Property featured on home" : "Removed from featured");
     } catch (e) {
       toast.error(e.response?.data?.message || "Failed to update featured status");
-    } finally {
-      setProcessing(id, false);
-    }
+    } finally { setProcessing(id, false); }
   };
 
-  const statusBadgeClass = (p) =>
-    p.approved ? "bg-green-100 text-green-800" : p.rejected ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-700";
-  const statusLabel = (p) => p.approved ? "Approved" : p.rejected ? "Rejected" : "Pending";
+  const statusBadge = (p) => {
+    if (p.approved) return <span className="inline-flex items-center rounded-full bg-[#e8f5e9] px-2.5 py-0.5 text-[11px] font-medium text-[#2e7d32]">Approved</span>;
+    if (p.rejected) return <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-[11px] font-medium text-red-700">Rejected</span>;
+    return <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700">Pending</span>;
+  };
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">All Properties</h2>
+    <div className="max-w-[1400px] mx-auto">
+      <div className="mb-8">
+        <p className="font-eyebrow text-[11px] text-[color:var(--muted)]">Inventory</p>
+        <h1 className="font-display text-[36px] md:text-[42px] leading-tight mt-1 text-ink">All properties</h1>
+        <p className="mt-2 text-[14px] text-[color:var(--muted)]">Search, filter, and manage every listing.</p>
+      </div>
 
-      {/* Confirm modals */}
       <ConfirmModal
         isOpen={!!deleteTarget}
-        title="Delete Property"
+        title="Delete property"
         message="This will permanently delete the property. Continue?"
         confirmLabel="Delete"
         confirmClass="bg-red-600 hover:bg-red-700"
@@ -134,93 +123,122 @@ export default function AllProperties() {
 
       {/* Reject reason modal */}
       {rejectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setRejectModal(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-3">Reject Property</h3>
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm grid place-items-center px-4" onClick={() => setRejectModal(null)}>
+          <div className="bg-card rounded-3xl w-full max-w-md p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display text-[22px]">Reject property</h3>
+              <button onClick={() => setRejectModal(null)} className="w-8 h-8 rounded-full hover:bg-paper flex items-center justify-center"><X className="w-4 h-4" /></button>
+            </div>
+            <label className="block font-eyebrow text-[11px] text-[color:var(--muted)] mb-1.5">Reason</label>
             <textarea
               rows={3}
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               placeholder="Enter reason for rejection…"
-              className="w-full border border-gray-200 rounded-xl p-3 text-sm resize-none focus:ring-2 focus:ring-red-200"
+              className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
             />
-            <div className="mt-3 flex gap-2 justify-end">
-              <button onClick={() => setRejectModal(null)} className="px-4 py-2 rounded-xl border text-sm">Cancel</button>
-              <button onClick={submitReject} className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold">Reject</button>
+            <div className="mt-4 flex gap-2 justify-end">
+              <button onClick={() => setRejectModal(null)} className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink transition">Cancel</button>
+              <button onClick={submitReject} className="inline-flex items-center px-5 py-2.5 rounded-full bg-red-600 text-paper text-sm font-medium hover:bg-red-700 transition">Reject</button>
             </div>
           </div>
         </div>
       )}
 
       {/* Filters */}
-      <form onSubmit={handleSearch} className="flex flex-wrap gap-3 mb-6">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search title or owner…"
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 flex-1 min-w-[200px]"
-        />
+      <form onSubmit={handleSearch} className="flex flex-wrap gap-2.5 mb-6">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--muted)]" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search title or owner…"
+            className="w-full rounded-xl border border-rule bg-card py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:border-ink transition"
+          />
+        </div>
         <select
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-          className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="rounded-xl border border-rule bg-card px-3 py-2.5 text-sm focus:outline-none focus:border-ink transition"
         >
           <option value="">All statuses</option>
           <option value="approved">Approved</option>
           <option value="pending">Pending</option>
           <option value="rejected">Rejected</option>
         </select>
-        <button type="submit" className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Search</button>
+        <button type="submit" className="inline-flex items-center px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition">Search</button>
       </form>
 
       {loading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <div key={i} className="animate-pulse h-10 rounded-lg bg-gray-100" />)}
+        <div className="rounded-3xl border border-rule bg-card overflow-hidden">
+          {[...Array(8)].map((_, i) => (
+            <div key={i} className={`px-5 py-4 flex items-center gap-4 animate-pulse ${i !== 7 ? "border-b border-rule" : ""}`}>
+              <div className="h-4 w-1/4 rounded-full bg-[#e8e2d3]" />
+              <div className="h-4 w-1/5 rounded-full bg-[#e8e2d3]" />
+              <div className="h-5 w-16 rounded-full bg-[#e8e2d3]" />
+              <div className="h-4 w-20 rounded-full bg-[#e8e2d3]" />
+              <div className="h-4 w-16 rounded-full bg-[#e8e2d3]" />
+              <div className="h-4 w-20 rounded-full bg-[#e8e2d3] ml-auto" />
+            </div>
+          ))}
         </div>
       ) : properties.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">No properties found.</div>
+        <div className="rounded-3xl border border-rule bg-card p-12 text-center">
+          <div className="w-12 h-12 rounded-full bg-paper flex items-center justify-center mx-auto mb-4">
+            <Inbox className="w-5 h-5 text-[color:var(--muted)]" />
+          </div>
+          <h3 className="font-display text-[20px] text-ink">No properties found</h3>
+          <p className="text-[13px] text-[color:var(--muted)] mt-1">Try adjusting your filters.</p>
+        </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full text-sm border-collapse">
-              <thead className="bg-gray-50">
+          <div className="overflow-x-auto rounded-3xl border border-rule bg-card">
+            <table className="w-full text-sm">
+              <thead className="bg-paper border-b border-rule">
                 <tr>
                   {["Title", "Owner", "Status", "City", "Price", "Featured", "Created", "Actions"].map((h) => (
-                    <th key={h} className="py-2 px-3 text-left font-medium text-gray-600">{h}</th>
+                    <th key={h} className="py-3 px-4 text-left font-eyebrow text-[10px] text-[color:var(--muted)]">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-rule">
                 {properties.map((p) => {
                   const isProcessing = processingIds.has(p._id);
                   return (
-                    <tr key={p._id} className="hover:bg-blue-50/40 transition">
-                      <td className="py-2 px-3 font-medium text-gray-900 max-w-[180px] truncate">{p.title}</td>
-                      <td className="py-2 px-3 text-gray-600">{p.ownerKYC?.ownerName || "N/A"}</td>
-                      <td className="py-2 px-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(p)}`}>{statusLabel(p)}</span>
-                      </td>
-                      <td className="py-2 px-3 text-gray-600">{p.location?.city || "N/A"}</td>
-                      <td className="py-2 px-3 text-gray-600">₹{p.price?.toLocaleString()}</td>
-                      <td className="py-2 px-3 text-center">{p.featured ? "⭐" : "—"}</td>
-                      <td className="py-2 px-3 text-gray-400 text-xs">{new Date(p.createdAt).toLocaleDateString()}</td>
-                      <td className="py-2 px-3">
-                        <div className="flex flex-wrap gap-1">
-                          <button onClick={() => setSelectedProperty(p)} className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100">View</button>
+                    <tr key={p._id} className="hover:bg-paper/60 transition">
+                      <td className="py-3 px-4 font-medium text-ink max-w-[180px] truncate">{p.title}</td>
+                      <td className="py-3 px-4 text-[color:var(--muted)]">{p.ownerKYC?.ownerName || "N/A"}</td>
+                      <td className="py-3 px-4">{statusBadge(p)}</td>
+                      <td className="py-3 px-4 text-[color:var(--muted)]">{p.location?.city || "N/A"}</td>
+                      <td className="py-3 px-4 text-ink">₹{p.price?.toLocaleString("en-IN")}</td>
+                      <td className="py-3 px-4 text-center">{p.featured ? <Star className="w-3.5 h-3.5 text-accent fill-accent inline" /> : <span className="text-[color:var(--muted)]">—</span>}</td>
+                      <td className="py-3 px-4 text-[color:var(--muted)] text-[12px] whitespace-nowrap">{new Date(p.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex flex-wrap gap-1.5 justify-end">
+                          <button onClick={() => setSelectedProperty(p)} title="View" className="w-8 h-8 rounded-full bg-card border border-rule hover:border-ink flex items-center justify-center transition">
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
                           {!p.approved && !p.rejected && (
                             <>
-                              <button disabled={isProcessing} onClick={() => approveProperty(p._id)} className="text-xs px-2 py-1 rounded bg-green-50 text-green-700 border border-green-100 hover:bg-green-100 disabled:opacity-50">Approve</button>
-                              <button disabled={isProcessing} onClick={() => { setRejectReason(""); setRejectModal(p._id); }} className="text-xs px-2 py-1 rounded bg-red-50 text-red-700 border border-red-100 hover:bg-red-100 disabled:opacity-50">Reject</button>
+                              <button disabled={isProcessing} onClick={() => approveProperty(p._id)} title="Approve" className="w-8 h-8 rounded-full bg-ink text-paper hover:bg-accent flex items-center justify-center transition disabled:opacity-50">
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button disabled={isProcessing} onClick={() => { setRejectReason(""); setRejectModal(p._id); }} title="Reject" className="w-8 h-8 rounded-full bg-card border border-rule hover:border-red-600 hover:text-red-600 flex items-center justify-center transition disabled:opacity-50">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
                             </>
                           )}
                           <button
                             disabled={isProcessing}
                             onClick={() => toggleFeatured(p._id, !!p.featured, !!p.approved)}
-                            className={`text-xs px-2 py-1 rounded border disabled:opacity-50 ${p.featured ? "bg-purple-600 text-white border-purple-600" : "bg-purple-50 text-purple-700 border-purple-100 hover:bg-purple-100"}`}
+                            title={p.featured ? "Unfeature" : "Feature"}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition disabled:opacity-50 ${p.featured ? "bg-accent text-paper" : "bg-card border border-rule hover:border-ink"}`}
                           >
-                            {p.featured ? "Unfeature" : "Feature"}
+                            <Star className={`w-3.5 h-3.5 ${p.featured ? "fill-current" : ""}`} />
                           </button>
-                          <button disabled={isProcessing} onClick={() => setDeleteTarget(p._id)} className="text-xs px-2 py-1 rounded bg-gray-50 text-gray-700 border border-gray-200 hover:bg-gray-100 disabled:opacity-50">Delete</button>
+                          <button disabled={isProcessing} onClick={() => setDeleteTarget(p._id)} title="Delete" className="w-8 h-8 rounded-full bg-card border border-rule hover:border-red-600 hover:text-red-600 flex items-center justify-center transition disabled:opacity-50">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -237,31 +255,34 @@ export default function AllProperties() {
 
       {/* Detail modal */}
       {selectedProperty && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setSelectedProperty(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center p-5 border-b">
-              <h2 className="text-xl font-bold text-gray-900 truncate">{selectedProperty.title}</h2>
-              <button onClick={() => setSelectedProperty(null)} className="p-2 rounded-full hover:bg-gray-100">✕</button>
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm grid place-items-center px-4" onClick={() => setSelectedProperty(null)}>
+          <div className="bg-card rounded-3xl shadow-card-hover max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b border-rule">
+              <div className="min-w-0">
+                <p className="font-eyebrow text-[11px] text-[color:var(--muted)]">Property detail</p>
+                <h2 className="font-display text-[22px] text-ink truncate mt-0.5">{selectedProperty.title}</h2>
+              </div>
+              <button onClick={() => setSelectedProperty(null)} className="w-9 h-9 rounded-full hover:bg-paper flex items-center justify-center"><X className="w-4 h-4" /></button>
             </div>
-            <div className="p-5 space-y-5">
-              <div className="grid grid-cols-2 gap-3 text-sm text-gray-600">
-                <div><span className="font-medium">City:</span> {selectedProperty.location?.city}</div>
-                <div><span className="font-medium">Price:</span> ₹{selectedProperty.price?.toLocaleString()}</div>
-                <div><span className="font-medium">Status:</span> <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusBadgeClass(selectedProperty)}`}>{statusLabel(selectedProperty)}</span></div>
-                <div><span className="font-medium">Featured:</span> {selectedProperty.featured ? "Yes ⭐" : "No"}</div>
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-3 text-[13px]">
+                <div><span className="text-[color:var(--muted)]">City:</span> <span className="text-ink">{selectedProperty.location?.city}</span></div>
+                <div><span className="text-[color:var(--muted)]">Price:</span> <span className="text-ink">₹{selectedProperty.price?.toLocaleString("en-IN")}</span></div>
+                <div className="flex items-center gap-2"><span className="text-[color:var(--muted)]">Status:</span> {statusBadge(selectedProperty)}</div>
+                <div><span className="text-[color:var(--muted)]">Featured:</span> <span className="text-ink">{selectedProperty.featured ? "Yes" : "No"}</span></div>
               </div>
               {selectedProperty.description && (
                 <div>
-                  <h3 className="font-semibold text-gray-700 mb-1">Description</h3>
-                  <p className="text-sm text-gray-600 whitespace-pre-line">{selectedProperty.description}</p>
+                  <p className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-2">Description</p>
+                  <p className="text-[13px] text-ink whitespace-pre-line leading-relaxed">{selectedProperty.description}</p>
                 </div>
               )}
               {selectedProperty.images?.length > 0 && (
                 <div>
-                  <h3 className="font-semibold text-gray-700 mb-2">Images</h3>
+                  <p className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-2">Images</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedProperty.images.map((img, i) => (
-                      <img key={i} src={img} alt="" className="h-20 rounded-lg object-cover border" loading="lazy" />
+                      <img key={i} src={img} alt="" className="h-24 w-32 rounded-xl object-cover border border-rule" loading="lazy" />
                     ))}
                   </div>
                 </div>

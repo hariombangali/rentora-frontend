@@ -6,7 +6,6 @@ import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import {
   EllipsisVerticalIcon,
   MagnifyingGlassIcon,
-  FunnelIcon,
   CheckCircleIcon,
   XCircleIcon,
   ClockIcon,
@@ -14,6 +13,8 @@ import {
   PencilSquareIcon,
   TrashIcon,
   BoltIcon,
+  InboxArrowDownIcon,
+  PlusIcon,
 } from "@heroicons/react/24/outline";
 
 export default function MyProperties() {
@@ -25,8 +26,8 @@ export default function MyProperties() {
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [toast, setToast] = useState(null); // { type: 'success'|'error', message: string }
-  const [confirmState, setConfirmState] = useState(null); // { id, title, message, onConfirm }
+  const [toast, setToast] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
 
   const navigate = useNavigate();
 
@@ -61,7 +62,6 @@ export default function MyProperties() {
 
   const filtered = useMemo(() => {
     let list = [...properties];
-
     if (query.trim()) {
       const q = query.toLowerCase();
       list = list.filter(
@@ -71,11 +71,7 @@ export default function MyProperties() {
           String(p.price || "").includes(q)
       );
     }
-
-    if (typeFilter !== "all") {
-      list = list.filter((p) => p.type?.toLowerCase() === typeFilter);
-    }
-
+    if (typeFilter !== "all") list = list.filter((p) => p.type?.toLowerCase() === typeFilter);
     if (statusFilter !== "all") {
       if (statusFilter === "approved") list = list.filter((p) => p.approved && !p.rejected);
       if (statusFilter === "rejected") list = list.filter((p) => p.rejected);
@@ -83,49 +79,38 @@ export default function MyProperties() {
       if (statusFilter === "active") list = list.filter((p) => p.active);
       if (statusFilter === "inactive") list = list.filter((p) => !p.active);
     }
-
-    if (sortBy === "newest") {
-      list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-    } else if (sortBy === "price-asc") {
-      list.sort((a, b) => (a.price || 0) - (b.price || 0));
-    } else if (sortBy === "price-desc") {
-      list.sort((a, b) => (b.price || 0) - (a.price || 0));
-    } else if (sortBy === "title") {
-      list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-    }
-
+    if (sortBy === "newest") list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    else if (sortBy === "price-asc") list.sort((a, b) => (a.price || 0) - (b.price || 0));
+    else if (sortBy === "price-desc") list.sort((a, b) => (b.price || 0) - (a.price || 0));
+    else if (sortBy === "title") list.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
     return list;
   }, [properties, query, typeFilter, statusFilter, sortBy]);
 
-  function badge(p) {
+  function statusBadge(p) {
     if (p.approved && !p.rejected)
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-700">
-          <CheckCircleIcon className="h-4 w-4" />
-          Approved
+        <span className="inline-flex items-center gap-1 rounded-full bg-[#e8f5e9] px-2.5 py-1 text-[11px] font-medium text-[#2e7d32]">
+          <CheckCircleIcon className="h-3.5 w-3.5" /> Approved
         </span>
       );
     if (p.rejected)
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-xs font-medium text-red-700">
-          <XCircleIcon className="h-4 w-4" />
-          Rejected
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700">
+          <XCircleIcon className="h-3.5 w-3.5" /> Rejected
         </span>
       );
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-700">
-        <ClockIcon className="h-4 w-4" />
-        Pending
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-700">
+        <ClockIcon className="h-3.5 w-3.5" /> Pending
       </span>
     );
   }
 
-  // Delete (with confirmation modal)
   const requestDelete = (id, title) => {
     setConfirmState({
       id,
       title: "Delete property",
-      message: `Are you sure you want to delete “${title || "this property"}”? This action cannot be undone.`,
+      message: `Are you sure you want to delete "${title || "this property"}"? This action cannot be undone.`,
       onConfirm: () => handleDelete(id),
     });
   };
@@ -133,9 +118,7 @@ export default function MyProperties() {
   const handleDelete = async (id) => {
     try {
       const token = localStorage.getItem("token");
-      await API.delete(`/properties/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await API.delete(`/properties/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       setProperties((prev) => prev.filter((p) => p._id !== id));
       setToast({ type: "success", message: "Property deleted" });
     } catch (err) {
@@ -145,32 +128,23 @@ export default function MyProperties() {
     }
   };
 
-  // Toggle Active
   const handleToggle = async (id, active) => {
     const prev = [...properties];
-    // Optimistic UI
     setProperties((prevList) => prevList.map((p) => (p._id === id ? { ...p, active: !active } : p)));
-
     try {
       const token = localStorage.getItem("token");
-      const res = await API.put(
-        `/properties/${id}/toggle`,
-        { active: !active },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await API.put(`/properties/${id}/toggle`, { active: !active }, { headers: { Authorization: `Bearer ${token}` } });
       setProperties((prevList) => prevList.map((p) => (p._id === id ? res.data : p)));
       setToast({ type: "success", message: !active ? "Activated" : "Deactivated" });
     } catch (err) {
-      // rollback
       setProperties(prev);
       setToast({ type: "error", message: err.response?.data?.message || "Failed to update status" });
     }
   };
 
-  // Toast auto-dismiss
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2200);
+    const t = setTimeout(() => setToast(null), 2500);
     return () => clearTimeout(t);
   }, [toast]);
 
@@ -179,65 +153,72 @@ export default function MyProperties() {
     return Array.from(set);
   }, [properties]);
 
+  const hasFilters = query || typeFilter !== "all" || statusFilter !== "all";
+
   return (
-    <div className="mx-auto max-w-7xl p-6 md:p-8">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight md:text-3xl">My Properties</h2>
-          <p className="mt-1 text-sm text-gray-600">
-            Manage listings, update status, and review requests from one place.
-          </p>
-        </div>
-        <Link
-          to="/postProperty"
-          className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-blue-700"
-        >
-          + Post Property
-        </Link>
-      </div>
+    <div className="min-h-screen bg-paper">
+      <div className="mx-auto max-w-7xl px-5 py-10 md:px-10 md:py-12">
 
-      {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Stat label="Total" value={stats.total} />
-        <Stat label="Approved" value={stats.approved} color="text-green-600" />
-        <Stat label="Pending" value={stats.pending} color="text-amber-600" />
-        <Stat label="Rejected" value={stats.rejected} color="text-red-600" />
-        <Stat label="Active" value={stats.active} color="text-blue-600" />
-      </div>
-
-      {/* Toolbar */}
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center">
-        <div className="relative flex-1">
-          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by title, type, or price..."
-            className="w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm shadow-sm outline-none placeholder:text-gray-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          />
+        {/* Header */}
+        <div className="mb-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="font-eyebrow text-[11px] text-[color:var(--muted)] mb-1">Owner dashboard</p>
+            <h1 className="font-display text-[36px] md:text-[42px] leading-tight text-ink">My Properties</h1>
+            <p className="mt-2 text-sm text-[color:var(--muted)]">
+              Manage listings, update status, and review requests from one place.
+            </p>
+          </div>
+          <Link
+            to="/postProperty"
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-sm font-medium text-paper hover:bg-accent transition shrink-0"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Post Property
+          </Link>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <FunnelIcon className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+
+        {/* Stats */}
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {[
+            { label: "Total", value: stats.total, accent: false },
+            { label: "Approved", value: stats.approved, color: "#2e7d32" },
+            { label: "Pending", value: stats.pending, color: "#b45309" },
+            { label: "Rejected", value: stats.rejected, color: "#b91c1c" },
+            { label: "Active", value: stats.active, color: "var(--accent)" },
+          ].map((s) => (
+            <div key={s.label} className="rounded-2xl border border-rule bg-card px-4 py-4 shadow-sm">
+              <p className="font-eyebrow text-[10px] text-[color:var(--muted)]">{s.label}</p>
+              <p className="mt-1 text-2xl font-semibold" style={{ color: s.color || "var(--ink)" }}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Toolbar */}
+        <div className="mb-7 flex flex-col gap-3 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <MagnifyingGlassIcon className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--muted)]" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by title, type, or price…"
+              className="w-full rounded-xl border border-rule bg-card py-2.5 pl-10 pr-4 text-sm text-ink placeholder:text-[color:var(--muted)] focus:outline-none focus:border-ink transition"
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white py-2 pl-8 pr-8 text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="rounded-xl border border-rule bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-ink transition"
             >
               <option value="all">All types</option>
               {uniqueTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t.charAt(0).toUpperCase() + t.slice(1)}
-                </option>
+                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
               ))}
             </select>
-          </div>
-
-          <div>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="rounded-xl border border-rule bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-ink transition"
             >
               <option value="all">All status</option>
               <option value="approved">Approved</option>
@@ -246,13 +227,10 @@ export default function MyProperties() {
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </select>
-          </div>
-
-          <div>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="rounded-md border border-gray-300 bg-white py-2 px-3 text-sm shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              className="rounded-xl border border-rule bg-card px-3 py-2.5 text-sm text-ink focus:outline-none focus:border-ink transition"
             >
               <option value="newest">Newest</option>
               <option value="price-asc">Price: Low → High</option>
@@ -261,237 +239,206 @@ export default function MyProperties() {
             </select>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      {loading ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <SkeletonCard key={i} />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="mx-auto max-w-md rounded-md border border-red-200 bg-red-50 p-4 text-center">
-          <p className="font-medium text-red-700">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="mt-3 inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-          >
-            Retry
-          </button>
-        </div>
-      ) : !filtered || filtered.length === 0 ? (
-        <div className="mx-auto max-w-lg rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto mb-3 h-14 w-14 rounded-full bg-gray-100"></div>
-          <h3 className="text-lg font-semibold">No properties found</h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Try adjusting filters or post a new property to get started.
-          </p>
-          <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
-            <button
-              onClick={() => {
-                setQuery("");
-                setTypeFilter("all");
-                setStatusFilter("all");
-                setSortBy("newest");
-              }}
-              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50"
-            >
-              Clear filters
-            </button>
-            <Link
-              to="/post-property"
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Post Property
-            </Link>
+        {/* Content */}
+        {loading ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
-        </div>
-      ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p) => {
-            const firstImage =
-              p.images && p.images.length > 0
-                ? p.images[0]
-                : "/default-property.jpg";
-
-            return (
-              <div
-                key={p._id}
-                className="group relative flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:shadow-md"
+        ) : error ? (
+          <div className="mx-auto max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
+            <p className="font-medium text-red-700">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 inline-flex items-center rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper hover:bg-accent transition"
+            >
+              Retry
+            </button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="mx-auto max-w-sm rounded-2xl border border-rule bg-card p-10 text-center shadow-sm">
+            <div className="mx-auto mb-4 h-14 w-14 rounded-2xl bg-paper flex items-center justify-center">
+              <InboxArrowDownIcon className="h-7 w-7 text-[color:var(--muted)]" />
+            </div>
+            <h3 className="font-display text-xl text-ink">No properties found</h3>
+            <p className="mt-1.5 text-sm text-[color:var(--muted)]">
+              {hasFilters ? "Try adjusting your filters." : "Post a property to get started."}
+            </p>
+            <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+              {hasFilters && (
+                <button
+                  onClick={() => { setQuery(""); setTypeFilter("all"); setStatusFilter("all"); setSortBy("newest"); }}
+                  className="rounded-full border border-rule bg-card px-5 py-2 text-sm font-medium text-ink hover:border-ink transition"
+                >
+                  Clear filters
+                </button>
+              )}
+              <Link
+                to="/postProperty"
+                className="rounded-full bg-ink px-5 py-2 text-sm font-medium text-paper hover:bg-accent transition"
               >
-                <div className="relative">
-                  <img
-                    src={firstImage}
-                    alt={p.title}
-                    className="h-48 w-full object-cover"
-                    loading="lazy"
-                    onError={(e) => {
-                      e.currentTarget.src = "/default-property.jpg";
-                    }}
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/30 via-black/0 to-transparent opacity-0 transition group-hover:opacity-100" />
+                Post Property
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((p) => {
+              const firstImage = p.images?.length > 0 ? p.images[0] : "/default-property.jpg";
+              return (
+                <div
+                  key={p._id}
+                  className="group flex flex-col overflow-hidden rounded-2xl border border-rule bg-card shadow-sm hover:shadow-md transition"
+                >
+                  {/* Image */}
+                  <div className="relative h-48 overflow-hidden">
+                    <img
+                      src={firstImage}
+                      alt={p.title}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                      loading="lazy"
+                      onError={(e) => { e.currentTarget.src = "/default-property.jpg"; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
 
-                  <div className="absolute right-2 top-2 flex items-center gap-2">
-                    {badge(p)}
-                    <Menu as="div" className="relative">
-                      <MenuButton className="inline-flex rounded-md bg-white/90 p-1.5 text-gray-700 shadow hover:bg-white focus:outline-none">
-                        <EllipsisVerticalIcon className="h-5 w-5" />
-                      </MenuButton>
-                      <MenuItems
-                        anchor="bottom end"
-                        className="z-20 mt-2 w-48 origin-top-right rounded-md border border-gray-200 bg-white p-1 text-sm shadow-lg focus:outline-none"
-                      >
-                        <MenuItem>
-                          {({ active }) => (
-                            <Link
-                              to={`/properties/${p._id}`}
-                              className={`flex items-center gap-2 rounded px-3 py-2 ${active ? "bg-gray-100" : ""}`}
-                            >
-                              <EyeIcon className="h-4 w-4" />
-                              View details
-                            </Link>
-                          )}
-                        </MenuItem>
-                        <MenuItem>
-                          {({ active }) => (
-                            <button
-                              onClick={() => navigate(`/edit-property/${p._id}`)}
-                              className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left ${active ? "bg-gray-100" : ""}`}
-                            >
-                              <PencilSquareIcon className="h-4 w-4" />
-                              Edit
-                            </button>
-                          )}
-                        </MenuItem>
-                        <MenuItem>
-                          {({ active }) => (
-                            <button
-                              onClick={() => handleToggle(p._id, p.active)}
-                              className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left ${active ? "bg-gray-100" : ""}`}
-                            >
-                              <BoltIcon className="h-4 w-4" />
-                              {p.active ? "Deactivate" : "Activate"}
-                            </button>
-                          )}
-                        </MenuItem>
-                        <MenuItem>
-                          {({ active }) => (
-                            <button
-                              onClick={() => navigate(`/properties/${p._id}/requests`)}
-                              className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left ${active ? "bg-gray-100" : ""}`}
-                            >
-                              <FunnelIcon className="h-4 w-4" />
-                              Requests
-                            </button>
-                          )}
-                        </MenuItem>
-                        <div className="my-1 border-t border-gray-100" />
-                        <MenuItem>
-                          {({ active }) => (
-                            <button
-                              onClick={() => requestDelete(p._id, p.title)}
-                              className={`flex w-full items-center gap-2 rounded px-3 py-2 text-left ${active ? "bg-red-50" : ""} text-red-600`}
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                              Delete
-                            </button>
-                          )}
-                        </MenuItem>
-                      </MenuItems>
-                    </Menu>
-                  </div>
-                </div>
+                    {/* Status badge */}
+                    <div className="absolute left-3 top-3">{statusBadge(p)}</div>
 
-                <div className="flex flex-1 flex-col p-4">
-                  <h3 className="line-clamp-1 text-lg font-semibold">{p.title}</h3>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {p.location?.area || p.location?.city || ""} {p.bhk ? `• ${p.bhk} BHK` : ""}{" "}
-                    {p.size ? `• ${p.size} sq.ft.` : ""}
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-gray-900">
-                    ₹{p.price?.toLocaleString("en-IN")}/month
-                  </p>
-
-                  {p.rejected && (
-                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                      <b>Rejection Reason:</b>{" "}
-                      {p.rejectionReason && p.rejectionReason.trim() !== "" ? (
-                        p.rejectionReason
-                      ) : (
-                        <span className="italic text-gray-500">No reason specified</span>
-                      )}
+                    {/* Active pill */}
+                    <div className="absolute left-3 bottom-3">
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${p.active ? "bg-ink/80 text-paper" : "bg-black/40 text-paper/70"}`}>
+                        {p.active ? "Live" : "Inactive"}
+                      </span>
                     </div>
-                  )}
 
-                  <div className="mt-4 hidden gap-2 sm:flex">
-                    <Link
-                      to={`/properties/${p._id}`}
-                      className="flex-1 rounded-md bg-blue-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-blue-700"
-                    >
-                      View
-                    </Link>
-                    <button
-                      onClick={() => navigate(`/edit-property/${p._id}`)}
-                      className="flex-1 rounded-md bg-yellow-500 px-3 py-2 text-sm font-medium text-white hover:bg-yellow-600"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleToggle(p._id, p.active)}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-medium text-white ${p.active ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700"
-                        }`}
-                    >
-                      {p.active ? "Deactivate" : "Activate"}
-                    </button>
+                    {/* Menu */}
+                    <div className="absolute right-3 top-3">
+                      <Menu as="div" className="relative">
+                        <MenuButton className="inline-flex rounded-full bg-white/90 p-1.5 text-ink shadow hover:bg-white focus:outline-none transition">
+                          <EllipsisVerticalIcon className="h-4 w-4" />
+                        </MenuButton>
+                        <MenuItems
+                          anchor="bottom end"
+                          className="z-20 mt-2 w-48 origin-top-right rounded-xl border border-rule bg-card p-1 text-sm shadow-lg focus:outline-none"
+                        >
+                          <MenuItem>
+                            {({ active }) => (
+                              <Link
+                                to={`/properties/${p._id}`}
+                                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-ink transition ${active ? "bg-paper" : ""}`}
+                              >
+                                <EyeIcon className="h-4 w-4 text-[color:var(--muted)]" /> View details
+                              </Link>
+                            )}
+                          </MenuItem>
+                          <MenuItem>
+                            {({ active }) => (
+                              <button
+                                onClick={() => navigate(`/edit-property/${p._id}`)}
+                                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-ink transition ${active ? "bg-paper" : ""}`}
+                              >
+                                <PencilSquareIcon className="h-4 w-4 text-[color:var(--muted)]" /> Edit
+                              </button>
+                            )}
+                          </MenuItem>
+                          <MenuItem>
+                            {({ active }) => (
+                              <button
+                                onClick={() => handleToggle(p._id, p.active)}
+                                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-ink transition ${active ? "bg-paper" : ""}`}
+                              >
+                                <BoltIcon className="h-4 w-4 text-[color:var(--muted)]" /> {p.active ? "Deactivate" : "Activate"}
+                              </button>
+                            )}
+                          </MenuItem>
+                          <MenuItem>
+                            {({ active }) => (
+                              <button
+                                onClick={() => navigate(`/properties/${p._id}/requests`)}
+                                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-ink transition ${active ? "bg-paper" : ""}`}
+                              >
+                                <InboxArrowDownIcon className="h-4 w-4 text-[color:var(--muted)]" /> Requests
+                              </button>
+                            )}
+                          </MenuItem>
+                          <div className="my-1 border-t border-rule" />
+                          <MenuItem>
+                            {({ active }) => (
+                              <button
+                                onClick={() => requestDelete(p._id, p.title)}
+                                className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-red-600 transition ${active ? "bg-red-50" : ""}`}
+                              >
+                                <TrashIcon className="h-4 w-4" /> Delete
+                              </button>
+                            )}
+                          </MenuItem>
+                        </MenuItems>
+                      </Menu>
+                    </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 sm:hidden">
-                    <Link
-                      to={`/properties/${p._id}`}
-                      className="w-full rounded-md bg-blue-600 px-4 py-2 text-center text-sm font-medium text-white hover:bg-blue-700"
-                    >
-                      View details
-                    </Link>
-                    <button
-                      onClick={() => navigate(`/edit-property/${p._id}`)}
-                      className="w-full rounded-md bg-yellow-500 px-4 py-2 text-sm font-medium text-white hover:bg-yellow-600"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleToggle(p._id, p.active)}
-                      className={`w-full rounded-md px-4 py-2 text-sm font-medium text-white ${p.active ? "bg-gray-600 hover:bg-gray-700" : "bg-green-600 hover:bg-green-700"
+                  {/* Body */}
+                  <div className="flex flex-1 flex-col p-5">
+                    <h3 className="line-clamp-1 text-[15px] font-semibold text-ink">{p.title}</h3>
+                    <p className="mt-1 text-[13px] text-[color:var(--muted)]">
+                      {[p.location?.area || p.location?.city, p.bhk ? `${p.bhk} BHK` : null, p.size ? `${p.size} sq.ft.` : null]
+                        .filter(Boolean).join(" · ")}
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-ink">
+                      ₹{p.price?.toLocaleString("en-IN")}
+                      <span className="text-[13px] font-normal text-[color:var(--muted)]">/month</span>
+                    </p>
+
+                    {p.rejected && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-red-700">
+                        <span className="font-medium">Rejection reason: </span>
+                        {p.rejectionReason?.trim() || <span className="italic text-[color:var(--muted)]">No reason specified</span>}
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="mt-5 flex items-center gap-2">
+                      <Link
+                        to={`/properties/${p._id}`}
+                        className="flex-1 rounded-full border border-rule bg-paper px-3 py-2 text-center text-[13px] font-medium text-ink hover:border-ink transition"
+                      >
+                        View
+                      </Link>
+                      <button
+                        onClick={() => navigate(`/edit-property/${p._id}`)}
+                        className="flex-1 rounded-full border border-rule bg-paper px-3 py-2 text-[13px] font-medium text-ink hover:border-ink transition"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleToggle(p._id, p.active)}
+                        className={`flex-1 rounded-full px-3 py-2 text-[13px] font-medium transition ${
+                          p.active
+                            ? "border border-rule bg-paper text-ink hover:border-ink"
+                            : "bg-ink text-paper hover:bg-accent"
                         }`}
-                    >
-                      {p.active ? "Deactivate" : "Activate"}
-                    </button>
-                    <button
-                      onClick={() => navigate(`/properties/${p._id}/requests`)}
-                      className="w-full rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
-                    >
-                      Requests
-                    </button>
-                    <button
-                      onClick={() => requestDelete(p._id, p.title)}
-                      className="w-full rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
-                    >
-                      Delete
-                    </button>
+                      >
+                        {p.active ? "Deactivate" : "Activate"}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Toast */}
       {toast && (
         <div
-          className={`fixed bottom-4 right-4 z-50 rounded-md px-4 py-2 text-sm text-white shadow-lg ${toast.type === "success" ? "bg-green-600" : "bg-red-600"
-            }`}
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium text-paper shadow-lg transition ${
+            toast.type === "success" ? "bg-ink" : "bg-red-600"
+          }`}
         >
+          {toast.type === "success"
+            ? <CheckCircleIcon className="h-4 w-4" />
+            : <XCircleIcon className="h-4 w-4" />}
           {toast.message}
         </div>
       )}
@@ -509,52 +456,40 @@ export default function MyProperties() {
   );
 }
 
-// Small stat card
-function Stat({ label, value, color = "text-gray-900" }) {
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="text-xs text-gray-500">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${color}`}>{value}</div>
-    </div>
-  );
-}
-
-// Skeleton card
 function SkeletonCard() {
   return (
-    <div className="animate-pulse rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className="h-48 w-full bg-gray-200" />
-      <div className="space-y-2 p-4">
-        <div className="h-5 w-2/3 rounded bg-gray-200" />
-        <div className="h-4 w-1/2 rounded bg-gray-200" />
-        <div className="h-6 w-1/3 rounded bg-gray-200" />
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="h-9 rounded bg-gray-200" />
-          <div className="h-9 rounded bg-gray-200" />
-          <div className="h-9 rounded bg-gray-200" />
+    <div className="animate-pulse rounded-2xl border border-rule bg-card overflow-hidden">
+      <div className="h-48 w-full bg-[#e8e2d3]" />
+      <div className="space-y-3 p-5">
+        <div className="h-4 w-2/3 rounded-full bg-[#e8e2d3]" />
+        <div className="h-3 w-1/2 rounded-full bg-[#e8e2d3]" />
+        <div className="h-5 w-1/3 rounded-full bg-[#e8e2d3]" />
+        <div className="mt-4 flex gap-2">
+          <div className="h-9 flex-1 rounded-full bg-[#e8e2d3]" />
+          <div className="h-9 flex-1 rounded-full bg-[#e8e2d3]" />
+          <div className="h-9 flex-1 rounded-full bg-[#e8e2d3]" />
         </div>
       </div>
     </div>
   );
 }
 
-// Minimal confirm dialog
 function ConfirmDialog({ title, message, onCancel, onConfirm }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl">
-        <h4 className="text-lg font-semibold">{title}</h4>
-        <p className="mt-2 text-sm text-gray-700">{message}</p>
-        <div className="mt-5 flex items-center justify-end gap-2">
+      <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
+        <h4 className="font-display text-xl text-ink">{title}</h4>
+        <p className="mt-2 text-sm text-[color:var(--muted)] leading-relaxed">{message}</p>
+        <div className="mt-6 flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
-            className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50"
+            className="rounded-full border border-rule bg-paper px-5 py-2 text-sm font-medium text-ink hover:border-ink transition"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            className="rounded-full bg-red-600 px-5 py-2 text-sm font-medium text-paper hover:bg-red-700 transition"
           >
             Delete
           </button>

@@ -4,15 +4,17 @@ const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
 });
 
+const getStoredToken = () => localStorage.getItem("token") || sessionStorage.getItem("token");
+
 // Cache token in module variable; only re-read on storage events
-let cachedToken = localStorage.getItem("token");
+let cachedToken = getStoredToken();
 window.addEventListener("storage", (e) => {
-  if (e.key === "token") cachedToken = e.newValue;
+  if (e.key === "token") cachedToken = getStoredToken();
 });
 
 API.interceptors.request.use(
   (config) => {
-    const token = cachedToken || localStorage.getItem("token");
+    const token = cachedToken || getStoredToken();
     if (token && !config.headers.Authorization) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -29,6 +31,7 @@ API.interceptors.response.use(
       if (path !== "/login") sessionStorage.setItem("redirectAfterLogin", path);
       cachedToken = null;
       localStorage.removeItem("token");
+      sessionStorage.removeItem("token");
       localStorage.removeItem("user");
       window.location.href = "/login";
     }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Wrench, AlertTriangle } from "lucide-react";
+import { X, Wrench, AlertTriangle, ImagePlus, Trash2 } from "lucide-react";
 import API from "../services/api";
 import { toast } from "../utils/toast";
 
@@ -19,13 +19,49 @@ const PRIORITY = [
   { k: "high",   label: "High",   desc: "Urgent, same day" },
 ];
 
+const MAX_FILES = 5;
+const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+
 export default function RaiseIssueModal({ open, onClose, booking, onSubmitted }) {
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("medium");
   const [description, setDescription] = useState("");
+  const [images, setImages] = useState([]); // [{file, preview}]
   const [submitting, setSubmitting] = useState(false);
 
   if (!open) return null;
+
+  const reset = () => {
+    images.forEach((it) => URL.revokeObjectURL(it.preview));
+    setCategory(""); setDescription(""); setPriority("medium"); setImages([]);
+  };
+
+  const handleFiles = (files) => {
+    const incoming = Array.from(files || []);
+    if (!incoming.length) return;
+    const remaining = MAX_FILES - images.length;
+    if (remaining <= 0) { toast.error(`You can attach up to ${MAX_FILES} photos`); return; }
+
+    const accepted = [];
+    for (const file of incoming.slice(0, remaining)) {
+      if (!file.type.startsWith("image/")) continue;
+      if (file.size > MAX_FILE_BYTES) {
+        toast.error(`${file.name} is over 10 MB`);
+        continue;
+      }
+      accepted.push({ file, preview: URL.createObjectURL(file) });
+    }
+    setImages((prev) => [...prev, ...accepted]);
+  };
+
+  const removeImage = (idx) => {
+    setImages((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(idx, 1);
+      if (removed) URL.revokeObjectURL(removed.preview);
+      return next;
+    });
+  };
 
   const submit = async () => {
     if (!category) { toast.error("Pick a category"); return; }
@@ -36,14 +72,19 @@ export default function RaiseIssueModal({ open, onClose, booking, onSubmitted })
     setSubmitting(true);
     try {
       const token = localStorage.getItem("token");
-      await API.post(
-        "/issues",
-        { bookingId: booking._id, category, description: description.trim(), priority },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const fd = new FormData();
+      fd.append("bookingId", booking._id);
+      fd.append("category", category);
+      fd.append("description", description.trim());
+      fd.append("priority", priority);
+      images.forEach((it) => fd.append("images", it.file));
+
+      await API.post("/issues", fd, {
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "multipart/form-data" },
+      });
       toast.success("Issue raised — the owner will respond soon");
       onSubmitted?.();
-      setCategory(""); setDescription(""); setPriority("medium");
+      reset();
       onClose();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to submit");
@@ -125,8 +166,45 @@ export default function RaiseIssueModal({ open, onClose, booking, onSubmitted })
             <div className="text-[11px] text-[color:var(--muted)] mt-1">Owner will see this and update status. You can follow progress in My Bookings.</div>
           </div>
 
+          {/* Images */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="font-eyebrow text-[11px] text-[color:var(--muted)]">Photos (optional)</label>
+              <span className="text-[11px] text-[color:var(--muted)]">{images.length} / {MAX_FILES}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {images.map((it, i) => (
+                <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-rule bg-paper">
+                  <img src={it.preview} alt="" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(i)}
+                    className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-card/90 backdrop-blur flex items-center justify-center hover:bg-card transition"
+                    aria-label="Remove photo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  </button>
+                </div>
+              ))}
+              {images.length < MAX_FILES && (
+                <label className="aspect-square rounded-xl border border-dashed border-rule bg-paper hover:border-ink hover:bg-card transition cursor-pointer flex flex-col items-center justify-center gap-1 text-[color:var(--muted)] hover:text-ink">
+                  <ImagePlus className="w-5 h-5" strokeWidth={1.5} />
+                  <span className="text-[11px]">Add photo</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+            <p className="text-[11px] text-[color:var(--muted)] mt-2">A photo helps the owner act faster. Up to {MAX_FILES} images, 10 MB each.</p>
+          </div>
+
           {priority === "high" && (
-            <div className="flex items-start gap-2 text-[12px] bg-[oklch(0.95_0.04_25)] rounded-2xl p-3 text-[color:var(--danger)]" style={{ color: "oklch(0.5 0.15 25)" }}>
+            <div className="flex items-start gap-2 text-[12px] bg-[oklch(0.95_0.04_25)] rounded-2xl p-3" style={{ color: "oklch(0.5 0.15 25)" }}>
               <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
               <span>High-priority issues are for same-day safety concerns (gas leak, no water, electrical hazard). For non-urgent things, pick Medium.</span>
             </div>

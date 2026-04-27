@@ -1,12 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import API from "../services/api";
 import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
 import PayRentModal from "../components/PayRentModal";
 import RaiseIssueModal from "../components/RaiseIssueModal";
 import { generateAgreementPDF } from "../utils/printable";
-import { Calendar, MessageSquare, Clock, MapPin, FileText, Wrench } from "lucide-react";
+import { Calendar, MessageSquare, Clock, MapPin, FileText, Wrench, X, Send, CheckCheck, RefreshCcw, ChevronRight } from "lucide-react";
+
+const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace("/api", "");
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "N/A");
 const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "N/A");
@@ -43,6 +46,13 @@ export default function MyBookings() {
   const [withdrawTarget, setWithdrawTarget] = useState(null);
   const [payTarget, setPayTarget] = useState(null);
   const [issueTarget, setIssueTarget] = useState(null);
+  const [issueDetail, setIssueDetail] = useState(null); // the issue open in the drawer
+  const [reopenInput, setReopenInput] = useState(""); // text for reopen reason
+  const [reopenMode, setReopenMode] = useState(false);
+  const [issueWorking, setIssueWorking] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const [commentSending, setCommentSending] = useState(false);
+  const [issueLightbox, setIssueLightbox] = useState(null); // {images, idx}
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -179,6 +189,93 @@ export default function MyBookings() {
 
   const fallbackImg = "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=80";
 
+  // Issue actions (drawer)
+  const refreshIssue = (updated) => {
+    setIssues((prev) => prev.map((it) => (it._id === updated._id ? updated : it)));
+    setIssueDetail((prev) => (prev && prev._id === updated._id ? updated : prev));
+  };
+
+  const confirmIssueFix = async () => {
+    if (!issueDetail) return;
+    setIssueWorking(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.patch(`/issues/${issueDetail._id}/confirm`, {}, { headers: { Authorization: `Bearer ${token}` } });
+      refreshIssue(res.data);
+      toast.success("Thanks — issue closed.");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed");
+    } finally {
+      setIssueWorking(false);
+    }
+  };
+
+  const reopenIssue = async () => {
+    if (!issueDetail) return;
+    setIssueWorking(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.patch(
+        `/issues/${issueDetail._id}/reopen`,
+        { reason: reopenInput.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      refreshIssue(res.data);
+      toast.success("Reopened — owner notified.");
+      setReopenMode(false);
+      setReopenInput("");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed");
+    } finally {
+      setIssueWorking(false);
+    }
+  };
+
+  const sendIssueComment = async () => {
+    if (!issueDetail || !commentText.trim()) return;
+    setCommentSending(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.post(
+        `/issues/${issueDetail._id}/comments`,
+        { text: commentText.trim() },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      refreshIssue(res.data);
+      setCommentText("");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed");
+    } finally {
+      setCommentSending(false);
+    }
+  };
+
+  // Live updates: when the owner sends a message / changes status / schedules a visit,
+  // the server emits "issue:updated" to this user's room.
+  useEffect(() => {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (!token) return;
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ["websocket"] });
+
+    const handleUpdate = (updated) => {
+      if (!updated?._id) return;
+      setIssues((prev) => {
+        const idx = prev.findIndex((it) => it._id === updated._id);
+        if (idx === -1) return [updated, ...prev];
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      });
+      setIssueDetail((prev) => (prev && prev._id === updated._id ? updated : prev));
+    };
+
+    socket.on("issue:updated", handleUpdate);
+    return () => {
+      socket.off("issue:updated", handleUpdate);
+      socket.disconnect();
+    };
+  }, []);
+
   return (
     <div className="bg-paper min-h-screen">
       <div className="max-w-[1280px] mx-auto px-6 pt-8 pb-24">
@@ -230,9 +327,24 @@ export default function MyBookings() {
         />
 
         {loading ? (
-          <div className="mt-10 grid gap-4">
-            {[...Array(2)].map((_, i) => (
-              <div key={i} className="h-40 rounded-3xl bg-card border border-rule animate-pulse" />
+          <div className="mt-10 flex flex-col gap-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="bg-card border border-rule rounded-3xl p-2 grid grid-cols-1 md:grid-cols-[180px_1fr_180px] gap-4 items-center animate-pulse">
+                <div className="h-[140px] rounded-2xl bg-[#e8e2d3]" />
+                <div className="px-3 md:px-0 py-3 space-y-3">
+                  <div className="h-5 w-24 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-6 w-3/4 rounded-full bg-[#e8e2d3]" />
+                  <div className="h-4 w-1/2 rounded-full bg-[#e8e2d3]" />
+                  <div className="flex gap-4 pt-1">
+                    <div className="space-y-1"><div className="h-3 w-10 rounded-full bg-[#e8e2d3]" /><div className="h-4 w-16 rounded-full bg-[#e8e2d3]" /></div>
+                    <div className="space-y-1"><div className="h-3 w-10 rounded-full bg-[#e8e2d3]" /><div className="h-4 w-16 rounded-full bg-[#e8e2d3]" /></div>
+                  </div>
+                </div>
+                <div className="p-3 md:p-5 flex flex-col gap-2">
+                  <div className="h-9 w-full rounded-full bg-[#e8e2d3]" />
+                  <div className="h-4 w-20 rounded-full bg-[#e8e2d3]" />
+                </div>
+              </div>
             ))}
           </div>
         ) : (
@@ -429,6 +541,7 @@ export default function MyBookings() {
                       onPay={() => setPayTarget(b)}
                       onDownloadAgreement={() => downloadAgreement(b)}
                       onRaiseIssue={() => setIssueTarget(b)}
+                      onOpenIssue={(it) => { setIssueDetail(it); setReopenMode(false); setReopenInput(""); setCommentText(""); }}
                     />
                   ))
                 )}
@@ -520,6 +633,245 @@ export default function MyBookings() {
           } catch (e) { /* ignore */ }
         }}
       />
+
+      {/* Issue detail drawer (tenant) */}
+      {issueDetail && (
+        <IssueDrawer
+          issue={issueDetail}
+          onClose={() => { setIssueDetail(null); setReopenMode(false); setReopenInput(""); setCommentText(""); }}
+          onConfirm={confirmIssueFix}
+          onReopen={reopenIssue}
+          reopenMode={reopenMode}
+          setReopenMode={setReopenMode}
+          reopenInput={reopenInput}
+          setReopenInput={setReopenInput}
+          working={issueWorking}
+          commentText={commentText}
+          setCommentText={setCommentText}
+          onSendComment={sendIssueComment}
+          commentSending={commentSending}
+          onOpenLightbox={(images, idx) => setIssueLightbox({ images, idx })}
+        />
+      )}
+
+      {issueLightbox && (
+        <div className="fixed inset-0 z-[60] bg-ink/90 grid place-items-center p-4" onClick={() => setIssueLightbox(null)}>
+          <button onClick={() => setIssueLightbox(null)} className="absolute top-5 right-5 w-10 h-10 rounded-full bg-paper/10 text-paper flex items-center justify-center hover:bg-paper/20">
+            <X className="w-5 h-5" />
+          </button>
+          <img src={issueLightbox.images[issueLightbox.idx]} alt="" className="max-w-full max-h-[88vh] object-contain rounded-2xl" onClick={(e) => e.stopPropagation()} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IssueDrawer({
+  issue, onClose,
+  onConfirm, onReopen, reopenMode, setReopenMode, reopenInput, setReopenInput,
+  working, commentText, setCommentText, onSendComment, commentSending,
+  onOpenLightbox,
+}) {
+  const bodyRef = useRef(null);
+  const bottomRef = useRef(null);
+  const commentCount = issue.comments?.length || 0;
+
+  // Scroll the conversation into view: on open (with messages) and on every new message.
+  useEffect(() => {
+    const node = bottomRef.current;
+    const scroller = bodyRef.current;
+    if (!node || !scroller) return;
+    // Use rAF so the layout settles before we measure.
+    requestAnimationFrame(() => {
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    });
+  }, [commentCount, issue._id]);
+
+  const fmtDateTime = (d) => !d ? "—" : new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  const statusBg = issue.status === "open" ? "oklch(0.95 0.04 25)" :
+                   issue.status === "resolved" ? "oklch(0.94 0.06 150)" :
+                   issue.status === "closed" ? "var(--rule)" :
+                   "oklch(0.94 0.05 80)";
+  const statusFg = issue.status === "open" ? "oklch(0.5 0.15 25)" :
+                   issue.status === "resolved" ? "oklch(0.45 0.1 150)" :
+                   issue.status === "closed" ? "var(--ink-soft)" :
+                   "oklch(0.45 0.12 60)";
+  const showConfirmActions = issue.status === "resolved";
+  const canReopen = issue.status === "resolved" || issue.status === "closed";
+
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm flex items-end md:items-stretch md:justify-end" onClick={onClose}>
+      <div className="bg-card w-full md:max-w-md h-[92vh] md:h-full rounded-t-3xl md:rounded-none flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="px-5 py-4 border-b border-rule flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize" style={{ background: statusBg, color: statusFg }}>
+                {issue.status.replace("_", " ")}
+              </span>
+              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] bg-paper border border-rule text-[color:var(--muted)]">{issue.priority} priority</span>
+              {issue.reopenCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700">
+                  <RefreshCcw className="w-3 h-3" /> Reopened {issue.reopenCount}×
+                </span>
+              )}
+            </div>
+            <h3 className="font-display text-[22px] mt-2 truncate">{issue.category}</h3>
+            <p className="text-[12px] text-[color:var(--muted)] truncate">{issue.property?.title}</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-paper flex items-center justify-center shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div ref={bodyRef} className="flex-1 overflow-y-auto bg-paper/40">
+          <div className="p-5 space-y-4">
+            {/* Awaiting confirm banner */}
+            {issue.status === "resolved" && issue.awaitingTenantConfirm && (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+                <p className="font-medium text-[13px] text-amber-900">Owner says it&rsquo;s fixed.</p>
+                <p className="text-[12px] text-amber-800 mt-0.5">If everything works, confirm to close it. If not, reopen and tell them what&rsquo;s still wrong.</p>
+              </div>
+            )}
+
+            {/* Schedule banner */}
+            {issue.scheduledFor && (
+              <div className="rounded-2xl border border-rule bg-card px-4 py-3 flex items-center gap-2.5 text-[13px]">
+                <Calendar className="w-3.5 h-3.5 text-accent shrink-0" />
+                <span className="text-ink"><b>Visit scheduled:</b> {fmtDateTime(issue.scheduledFor)}</span>
+              </div>
+            )}
+
+            {/* Description */}
+            <div>
+              <p className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-1.5">Your report</p>
+              <p className="text-[14px] text-ink leading-relaxed whitespace-pre-wrap bg-card border border-rule rounded-2xl px-4 py-3">
+                {issue.description}
+              </p>
+            </div>
+
+            {/* Images */}
+            {issue.images?.length > 0 && (
+              <div>
+                <p className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-1.5">Photos</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {issue.images.map((src, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => onOpenLightbox(issue.images, idx)}
+                      className="aspect-square rounded-xl overflow-hidden border border-rule hover:border-ink transition"
+                    >
+                      <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Owner note */}
+            {issue.ownerNote && (
+              <div>
+                <p className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-1.5">Owner&rsquo;s note</p>
+                <p className="text-[14px] text-ink leading-relaxed bg-card border border-rule rounded-2xl px-4 py-3">{issue.ownerNote}</p>
+              </div>
+            )}
+
+            {/* Comments */}
+            <div>
+              <p className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-2">Conversation</p>
+              {issue.comments?.length ? (
+                <div className="space-y-2.5">
+                  {issue.comments.map((c, i) => {
+                    const mine = c.authorRole === "tenant";
+                    return (
+                      <div key={c._id || i} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-[14px] leading-relaxed ${
+                          mine ? "bg-ink text-paper" : "bg-card border border-rule text-ink"
+                        }`}>
+                          <p className="whitespace-pre-wrap">{c.text}</p>
+                          <div className={`mt-1 text-[10px] ${mine ? "text-paper/60" : "text-[color:var(--muted)]"}`}>
+                            {c.author?.name || (c.authorRole === "owner" ? "Owner" : "You")}
+                            {c.createdAt && <> · {new Date(c.createdAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[13px] text-[color:var(--muted)] bg-card border border-rule rounded-2xl px-4 py-3">No messages yet. Send the owner an update or question below.</p>
+              )}
+            </div>
+            <div ref={bottomRef} />
+          </div>
+        </div>
+
+        {/* Reopen mode */}
+        {reopenMode ? (
+          <div className="px-5 py-4 border-t border-rule bg-card space-y-3">
+            <label className="block font-eyebrow text-[11px] text-[color:var(--muted)]">What&rsquo;s still wrong? (optional)</label>
+            <textarea
+              rows={2}
+              value={reopenInput}
+              onChange={(e) => setReopenInput(e.target.value)}
+              placeholder="Tap still drips overnight…"
+              className="w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setReopenMode(false); setReopenInput(""); }} className="inline-flex items-center px-4 py-2 rounded-full bg-card border border-rule text-ink text-[13px] hover:border-ink transition">Cancel</button>
+              <button onClick={onReopen} disabled={working} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-amber-600 text-white text-[13px] font-medium hover:bg-amber-700 transition disabled:opacity-50">
+                <RefreshCcw className="w-3.5 h-3.5" /> {working ? "Reopening…" : "Reopen issue"}
+              </button>
+            </div>
+          </div>
+        ) : showConfirmActions ? (
+          <div className="px-5 py-4 border-t border-rule bg-card flex gap-2">
+            <button
+              onClick={() => setReopenMode(true)}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm font-medium hover:border-ink transition"
+            >
+              <RefreshCcw className="w-3.5 h-3.5" /> Reopen
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={working}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition disabled:opacity-50"
+            >
+              <CheckCheck className="w-3.5 h-3.5" /> {working ? "Confirming…" : "Confirm fix"}
+            </button>
+          </div>
+        ) : (
+          <div className="px-3 py-3 border-t border-rule bg-card flex items-center gap-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSendComment(); } }}
+              placeholder="Send a message to the owner…"
+              disabled={commentSending}
+              className="flex-1 rounded-full border border-rule bg-card px-4 py-2.5 text-[14px] focus:outline-none focus:border-ink disabled:opacity-50"
+            />
+            {canReopen && (
+              <button
+                onClick={() => setReopenMode(true)}
+                title="Reopen issue"
+                className="w-10 h-10 rounded-full bg-card border border-rule text-ink flex items-center justify-center hover:border-ink transition"
+              >
+                <RefreshCcw className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={onSendComment}
+              disabled={commentSending || !commentText.trim()}
+              className="w-10 h-10 rounded-full bg-ink text-paper flex items-center justify-center hover:bg-accent transition disabled:opacity-50"
+              aria-label="Send"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -548,7 +900,7 @@ function EmptyState({ icon, title, body }) {
   );
 }
 
-function ActiveRentalCard({ b, issues = [], onPay, onDownloadAgreement, onRaiseIssue }) {
+function ActiveRentalCard({ b, issues = [], onPay, onDownloadAgreement, onRaiseIssue, onOpenIssue }) {
   const moveIn = b.checkIn ? new Date(b.checkIn) : null;
   const end = b.checkOut ? new Date(b.checkOut) : null;
   const now = new Date();
@@ -621,20 +973,46 @@ function ActiveRentalCard({ b, issues = [], onPay, onDownloadAgreement, onRaiseI
 
         {issues.length > 0 && (
           <div className="mt-5 bg-paper border border-rule rounded-2xl p-4">
-            <div className="font-eyebrow text-[10px] text-[color:var(--muted)] mb-2">Your issues</div>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="font-eyebrow text-[10px] text-[color:var(--muted)]">Your issues</div>
+              {issues.length > 3 && <span className="text-[11px] text-[color:var(--muted)]">{issues.length} total</span>}
+            </div>
             <div className="space-y-2">
               {issues.slice(0, 3).map((i) => {
-                const statusLabel = i.status.replace("_", " ");
+                const statusBg = i.status === "open" ? "oklch(0.95 0.04 25)" :
+                                 i.status === "resolved" ? "oklch(0.94 0.06 150)" :
+                                 i.status === "closed" ? "var(--rule)" :
+                                 "oklch(0.94 0.05 80)";
+                const statusFg = i.status === "open" ? "oklch(0.5 0.15 25)" :
+                                 i.status === "resolved" ? "oklch(0.45 0.1 150)" :
+                                 i.status === "closed" ? "var(--ink-soft)" :
+                                 "oklch(0.45 0.12 60)";
+                const needsAction = i.status === "resolved" && i.awaitingTenantConfirm;
                 return (
-                  <div key={i._id} className="flex items-center justify-between gap-3 text-[13px]">
-                    <div className="min-w-0">
-                      <span className="font-medium">{i.category}</span>
-                      <span className="text-[color:var(--muted)]"> · {i.description.slice(0, 60)}{i.description.length > 60 ? "…" : ""}</span>
+                  <button
+                    key={i._id}
+                    onClick={() => onOpenIssue?.(i)}
+                    className={`w-full flex items-center gap-3 px-2 py-1.5 rounded-xl text-[13px] text-left hover:bg-card transition ${
+                      needsAction ? "ring-1 ring-amber-300 bg-amber-50/60" : ""
+                    }`}
+                  >
+                    {i.images?.[0] && (
+                      <img src={i.images[0]} alt="" className="w-9 h-9 rounded-lg object-cover border border-rule shrink-0" loading="lazy" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-ink">{i.category}</span>
+                        {needsAction && <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-800">Needs your reply</span>}
+                      </div>
+                      <div className="text-[12px] text-[color:var(--muted)] truncate">
+                        {i.description.slice(0, 70)}{i.description.length > 70 ? "…" : ""}
+                      </div>
                     </div>
-                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] capitalize" style={{ background: ["open"].includes(i.status) ? "oklch(0.95 0.04 25)" : i.status === "resolved" ? "oklch(0.94 0.06 150)" : "oklch(0.94 0.05 80)", color: ["open"].includes(i.status) ? "oklch(0.5 0.15 25)" : i.status === "resolved" ? "oklch(0.45 0.1 150)" : "oklch(0.45 0.12 60)" }}>
-                      {statusLabel}
+                    <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] capitalize shrink-0" style={{ background: statusBg, color: statusFg }}>
+                      {i.status.replace("_", " ")}
                     </span>
-                  </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-[color:var(--muted)] shrink-0" />
+                  </button>
                 );
               })}
             </div>
