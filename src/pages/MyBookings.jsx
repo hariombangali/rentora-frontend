@@ -6,6 +6,7 @@ import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
 import PayRentModal from "../components/PayRentModal";
 import RaiseIssueModal from "../components/RaiseIssueModal";
+import MoveInChecklist from "../components/MoveInChecklist";
 import { generateAgreementPDF } from "../utils/printable";
 import { Calendar, MessageSquare, Clock, MapPin, FileText, Wrench, X, Send, CheckCheck, RefreshCcw, ChevronRight } from "lucide-react";
 
@@ -533,17 +534,31 @@ export default function MyBookings() {
                 {active.length === 0 ? (
                   <EmptyState icon={<Clock className="w-5 h-5 text-accent" />} title="No active rental" body="When you move into a Rentora home, you'll see your lease here." />
                 ) : (
-                  active.map((b) => (
-                    <ActiveRentalCard
-                      key={b._id}
-                      b={b}
-                      issues={issues.filter((i) => String(i.booking) === String(b._id))}
-                      onPay={() => setPayTarget(b)}
-                      onDownloadAgreement={() => downloadAgreement(b)}
-                      onRaiseIssue={() => setIssueTarget(b)}
-                      onOpenIssue={(it) => { setIssueDetail(it); setReopenMode(false); setReopenInput(""); setCommentText(""); }}
-                    />
-                  ))
+                  active.map((b) => {
+                    if (!b.moveInCompletedAt) {
+                      return (
+                        <MoveInChecklist
+                          key={b._id}
+                          booking={b}
+                          role="tenant"
+                          onUpdated={(updated) =>
+                            setBookings((prev) => prev.map((x) => (x._id === updated._id ? updated : x)))
+                          }
+                        />
+                      );
+                    }
+                    return (
+                      <ActiveRentalCard
+                        key={b._id}
+                        b={b}
+                        issues={issues.filter((i) => String(i.booking) === String(b._id))}
+                        onPay={() => setPayTarget(b)}
+                        onDownloadAgreement={() => downloadAgreement(b)}
+                        onRaiseIssue={() => setIssueTarget(b)}
+                        onOpenIssue={(it) => { setIssueDetail(it); setReopenMode(false); setReopenInput(""); setCommentText(""); }}
+                      />
+                    );
+                  })
                 )}
               </section>
             )}

@@ -5,6 +5,7 @@ import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
 import { X, MapPin, Calendar, MessageSquare, Clock } from "lucide-react";
 import { STATUS_CHIP } from "./MyBookings";
+import MoveInChecklist from "../components/MoveInChecklist";
 
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—");
@@ -350,6 +351,17 @@ export default function OwnerBookings() {
         ) : (
           <div className="mt-6 flex flex-col gap-3.5">
             {visible.map((b) => {
+              // Active rentals that haven't completed the move-in flow render the checklist instead.
+              if (tab === "active" && b.type === "rental" && !b.moveInCompletedAt) {
+                return (
+                  <MoveInChecklist
+                    key={b._id}
+                    booking={b}
+                    role="owner"
+                    onUpdated={(updated) => setBookings((prev) => prev.map((x) => (x._id === updated._id ? updated : x)))}
+                  />
+                );
+              }
               const chip = STATUS_CHIP[b.status] || STATUS_CHIP.pending;
               return (
                 <div key={b._id} className="bg-card border border-rule rounded-3xl p-5 md:p-6">
