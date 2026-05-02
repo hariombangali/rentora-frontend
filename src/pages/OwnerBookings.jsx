@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import API from "../services/api";
 import { toast } from "../utils/toast";
 import ConfirmModal from "../components/ConfirmModal";
@@ -7,8 +8,29 @@ import { X, MapPin, Calendar, MessageSquare, Clock } from "lucide-react";
 import { STATUS_CHIP } from "./MyBookings";
 import MoveInChecklist from "../components/MoveInChecklist";
 
+const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api").replace("/api", "");
+
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—");
 const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—");
+
+// Compute when a visit slot has ended (start + 30 min). Returns null if unparseable.
+function visitEndedAt(b) {
+  if (!b?.visitDate || !b?.visitSlot) return null;
+  const m = String(b.visitSlot).match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ampm = (m[3] || "").toUpperCase();
+  if (ampm === "PM" && h < 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  const d = new Date(b.visitDate);
+  d.setHours(h, min + 30, 0, 0);
+  return d;
+}
+function isVisitWindowOver(b) {
+  const end = visitEndedAt(b);
+  return end ? Date.now() >= end.getTime() + 60 * 60 * 1000 : false;
+}
 
 const TABS = [
   { k: "pending",  label: "Pending" },
@@ -50,6 +72,31 @@ export default function OwnerBookings() {
       .finally(() => setLoading(false));
   }, [authHeader]);
 
+  // Live updates: server emits "booking:updated" to this user's room when the tenant
+  // pays / signs / confirms move-in.
+  useEffect(() => {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    if (!token) return;
+    const socket = io(SOCKET_URL, { auth: { token }, transports: ["websocket"] });
+
+    const handleBookingUpdate = (updated) => {
+      if (!updated?._id || updated.type === "lead") return;
+      setBookings((prev) => {
+        const idx = prev.findIndex((b) => b._id === updated._id);
+        if (idx === -1) return [updated, ...prev];
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      });
+    };
+
+    socket.on("booking:updated", handleBookingUpdate);
+    return () => {
+      socket.off("booking:updated", handleBookingUpdate);
+      socket.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     if (!resTarget || !resDate) return;
     setLoadingSlots(true);
@@ -60,6 +107,21 @@ export default function OwnerBookings() {
   }, [resTarget, resDate]);
 
   const refreshOne = (updated) => setBookings((prev) => prev.map((b) => (b._id === updated._id ? updated : b)));
+
+  const markAttendance = async (bookingId, attended) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.post(
+        `/bookings/${bookingId}/visit-attendance`,
+        { attended },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      refreshOne(res.data);
+      toast.success(attended === "attended" ? "Visit confirmed" : "Marked as no-show");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed");
+    }
+  };
 
   const approve = async () => {
     if (!approveTarget) return;
@@ -143,9 +205,11 @@ export default function OwnerBookings() {
   // Partition
   const now = Date.now();
   const pending  = bookings.filter((b) => b.status === "pending");
-  const upcoming = bookings.filter((b) => isVisit(b) && ["approved", "rescheduled"].includes(b.status) && new Date(b.visitDate).getTime() >= now - 24*3600*1000);
+  // Upcoming includes any non-terminal visit so the post-visit prompt stays visible
+  // until the owner or tenant explicitly closes it.
+  const upcoming = bookings.filter((b) => isVisit(b) && ["approved", "rescheduled"].includes(b.status));
   const active   = bookings.filter((b) => isRental(b) && ["approved", "pending"].includes(b.status));
-  const history  = bookings.filter((b) => ["rejected", "cancelled", "completed"].includes(b.status) || (isVisit(b) && ["approved","rescheduled"].includes(b.status) && new Date(b.visitDate).getTime() < now - 24*3600*1000));
+  const history = bookings.filter((b) => ["rejected", "cancelled", "completed"].includes(b.status));
 
   const counts = { pending: pending.length, upcoming: upcoming.length, active: active.length, history: history.length };
   const visible = tab === "pending" ? pending : tab === "upcoming" ? upcoming : tab === "active" ? active : history;
@@ -411,6 +475,42 @@ export default function OwnerBookings() {
                       {b.message && (
                         <div className="mt-3 bg-paper border border-rule rounded-2xl px-3 py-2 text-[13px] whitespace-pre-wrap">
                           {b.message}
+                        </div>
+                      )}
+
+                      {/* Post-visit attendance prompt */}
+                      {isVisit(b) && isVisitWindowOver(b) && !b.attendedByOwner && !b.outcome && (
+                        <div className="mt-3 rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3">
+                          <p className="font-eyebrow text-[10px] text-accent">Visit slot ended</p>
+                          <p className="text-[14px] mt-0.5 text-ink">Did {b.user?.name || "the visitor"} show up?</p>
+                          <div className="mt-2.5 flex gap-2 flex-wrap">
+                            <button
+                              onClick={() => markAttendance(b._id, "attended")}
+                              className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-ink text-paper text-[12px] font-medium hover:bg-accent transition"
+                            >
+                              Yes, they came
+                            </button>
+                            <button
+                              onClick={() => markAttendance(b._id, "no_show")}
+                              className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-card border border-rule text-ink text-[12px] font-medium hover:border-ink transition"
+                            >
+                              No-show
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tenant already responded — surface their outcome to the owner */}
+                      {isVisit(b) && b.outcome && (
+                        <div className="mt-3 rounded-2xl border border-rule bg-paper px-4 py-3 text-[13px]">
+                          <span className="font-eyebrow text-[10px] text-[color:var(--muted)]">Tenant said</span>
+                          <div className="mt-1 text-ink">
+                            {b.outcome === "applied" && "Loved it — they're applying to rent."}
+                            {b.outcome === "considering" && "Still deciding."}
+                            {b.outcome === "passed" && "Not the right fit."}
+                            {b.outcome === "no_show" && "Didn't end up visiting."}
+                            {b.outcomeNote && <span className="text-[color:var(--muted)]"> &ldquo;{b.outcomeNote}&rdquo;</span>}
+                          </div>
                         </div>
                       )}
                     </div>

@@ -7,6 +7,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import PayRentModal from "../components/PayRentModal";
 import RaiseIssueModal from "../components/RaiseIssueModal";
 import MoveInChecklist from "../components/MoveInChecklist";
+import RentalApplicationModal from "../components/RentalApplicationModal";
 import { generateAgreementPDF } from "../utils/printable";
 import { Calendar, MessageSquare, Clock, MapPin, FileText, Wrench, X, Send, CheckCheck, RefreshCcw, ChevronRight } from "lucide-react";
 
@@ -15,6 +16,27 @@ const SOCKET_URL = (import.meta.env.VITE_API_URL || "http://localhost:5000/api")
 const formatDate = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "N/A");
 const formatDateShort = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "N/A");
 const fmtINR = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN");
+
+// Compute the time the visit slot ended (start + 30 min). Returns null if unparseable.
+function visitEndedAt(b) {
+  if (!b?.visitDate || !b?.visitSlot) return null;
+  const m = String(b.visitSlot).match(/(\d+):(\d+)\s*(AM|PM)?/i);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ampm = (m[3] || "").toUpperCase();
+  if (ampm === "PM" && h < 12) h += 12;
+  if (ampm === "AM" && h === 12) h = 0;
+  const d = new Date(b.visitDate);
+  d.setHours(h, min + 30, 0, 0);
+  return d;
+}
+// True if the visit slot has ended (and at least 1 hour has passed).
+function isVisitWindowOver(b) {
+  const end = visitEndedAt(b);
+  if (!end) return false;
+  return Date.now() >= end.getTime() + 60 * 60 * 1000;
+}
 
 // Status chip styles matching the design
 export const STATUS_CHIP = {
@@ -54,6 +76,10 @@ export default function MyBookings() {
   const [commentText, setCommentText] = useState("");
   const [commentSending, setCommentSending] = useState(false);
   const [issueLightbox, setIssueLightbox] = useState(null); // {images, idx}
+  const [outcomeTarget, setOutcomeTarget] = useState(null);   // visit booking awaiting feedback note
+  const [outcomeNote, setOutcomeNote] = useState("");
+  const [savingOutcome, setSavingOutcome] = useState(false);
+  const [applyTarget, setApplyTarget] = useState(null);       // {property, visitId} for the apply modal
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -78,6 +104,31 @@ export default function MyBookings() {
       })
       .finally(() => setLoading(false));
   }, [navigate]);
+
+  // Mark how a visit went. "applied" branches into the rental-application flow.
+  const submitVisitOutcome = async (bookingId, outcome, note = "") => {
+    setSavingOutcome(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await API.post(
+        `/bookings/${bookingId}/visit-outcome`,
+        { outcome, note },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setBookings((prev) => prev.map((b) => (b._id === bookingId ? res.data : b)));
+      const labels = {
+        applied: "Great — opening application",
+        considering: "Saved. Take your time.",
+        passed: "Got it — thanks for the feedback.",
+        no_show: "Marked as not visited.",
+      };
+      toast.success(labels[outcome] || "Saved");
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Failed to save");
+    } finally {
+      setSavingOutcome(false);
+    }
+  };
 
   const acceptReschedule = async (id) => {
     try {
@@ -118,7 +169,6 @@ export default function MyBookings() {
 
   // Partition into upcoming visits / active rental / past / cancelled
   const { upcoming, active, past, cancelled } = useMemo(() => {
-    const now = Date.now();
     const upcoming = [];
     const active = [];
     const past = [];
@@ -129,9 +179,10 @@ export default function MyBookings() {
       } else if (b.type === "rental" && ["approved", "confirmed", "pending"].includes(b.status)) {
         active.push(b);
       } else if (b.type === "visit") {
-        const when = new Date(b.visitDate || b.createdAt).getTime();
-        if (!isNaN(when) && when >= now - 24 * 3600 * 1000) upcoming.push(b);
-        else past.push(b);
+        // A visit moves to "past" once: status === completed, or tenant has marked an outcome.
+        // Until then, even if the slot has ended, it stays in upcoming with a "How did it go?" prompt.
+        if (b.status === "completed" || b.outcome) past.push(b);
+        else upcoming.push(b);
       } else if (b.type === "lead") {
         upcoming.push(b);
       } else {
@@ -251,14 +302,13 @@ export default function MyBookings() {
     }
   };
 
-  // Live updates: when the owner sends a message / changes status / schedules a visit,
-  // the server emits "issue:updated" to this user's room.
+  // Live updates: server emits "issue:updated" and "booking:updated" to this user's room.
   useEffect(() => {
     const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     if (!token) return;
     const socket = io(SOCKET_URL, { auth: { token }, transports: ["websocket"] });
 
-    const handleUpdate = (updated) => {
+    const handleIssueUpdate = (updated) => {
       if (!updated?._id) return;
       setIssues((prev) => {
         const idx = prev.findIndex((it) => it._id === updated._id);
@@ -270,9 +320,22 @@ export default function MyBookings() {
       setIssueDetail((prev) => (prev && prev._id === updated._id ? updated : prev));
     };
 
-    socket.on("issue:updated", handleUpdate);
+    const handleBookingUpdate = (updated) => {
+      if (!updated?._id) return;
+      setBookings((prev) => {
+        const idx = prev.findIndex((b) => b._id === updated._id);
+        if (idx === -1) return [updated, ...prev];
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      });
+    };
+
+    socket.on("issue:updated", handleIssueUpdate);
+    socket.on("booking:updated", handleBookingUpdate);
     return () => {
-      socket.off("issue:updated", handleUpdate);
+      socket.off("issue:updated", handleIssueUpdate);
+      socket.off("booking:updated", handleBookingUpdate);
       socket.disconnect();
     };
   }, []);
@@ -414,6 +477,50 @@ export default function MyBookings() {
                                       Decline
                                     </button>
                                   </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Post-visit prompt — appears once the slot has ended and tenant hasn't responded */}
+                            {!b.outcome && b.status !== "completed" && isVisitWindowOver(b) && (
+                              <div className="mt-4 rounded-2xl border border-accent/30 bg-accent/5 p-4">
+                                <p className="font-eyebrow text-[10px] text-accent">How did it go?</p>
+                                <p className="font-medium text-[14px] mt-1 text-ink">
+                                  Tell us what you thought of {b.property?.title || "the place"}.
+                                </p>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                  <button
+                                    onClick={() => {
+                                      submitVisitOutcome(b._id, "applied").then(() => {
+                                        setApplyTarget({ property: b.property, visitId: b._id });
+                                      });
+                                    }}
+                                    disabled={savingOutcome}
+                                    className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition disabled:opacity-50"
+                                  >
+                                    Loved it · Apply
+                                  </button>
+                                  <button
+                                    onClick={() => submitVisitOutcome(b._id, "considering")}
+                                    disabled={savingOutcome}
+                                    className="inline-flex items-center justify-center px-3 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition disabled:opacity-50"
+                                  >
+                                    Still deciding
+                                  </button>
+                                  <button
+                                    onClick={() => { setOutcomeTarget({ id: b._id, kind: "passed" }); setOutcomeNote(""); }}
+                                    disabled={savingOutcome}
+                                    className="inline-flex items-center justify-center px-3 py-2 rounded-full bg-card border border-rule text-ink text-[13px] font-medium hover:border-ink transition disabled:opacity-50"
+                                  >
+                                    Pass — not for me
+                                  </button>
+                                  <button
+                                    onClick={() => submitVisitOutcome(b._id, "no_show")}
+                                    disabled={savingOutcome}
+                                    className="inline-flex items-center justify-center px-3 py-2 rounded-full bg-card border border-rule text-[color:var(--muted)] text-[13px] font-medium hover:text-ink hover:border-ink transition disabled:opacity-50"
+                                  >
+                                    I didn&rsquo;t visit
+                                  </button>
                                 </div>
                               </div>
                             )}
@@ -566,36 +673,64 @@ export default function MyBookings() {
             {/* PAST STAYS */}
             {activeTab === "past" && (
               <section className="mt-8">
-                <h2 className="font-display text-[24px]">Past stays</h2>
+                <h2 className="font-display text-[24px]">Past visits &amp; stays</h2>
                 {past.length === 0 ? (
-                  <EmptyState icon={<Clock className="w-5 h-5 text-accent" />} title="No past stays yet" body="Homes you've lived in will appear here." />
+                  <EmptyState icon={<Clock className="w-5 h-5 text-accent" />} title="Nothing here yet" body="Visits you've completed and homes you've lived in will appear here." />
                 ) : (
                   <div className="mt-4 bg-card border border-rule rounded-3xl overflow-hidden">
-                    {past.map((b, i) => (
-                      <div
-                        key={b._id}
-                        className={`px-6 py-5 grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_auto] gap-5 items-center ${
-                          i !== past.length - 1 ? "border-b border-rule" : ""
-                        }`}
-                      >
-                        <div>
-                          <div className="font-medium">{b.property?.title || "Property"}</div>
-                          <div className="text-[12px] text-[color:var(--muted)]">{b.property?.location?.locality}</div>
+                    {past.map((b, i) => {
+                      const isVisit = b.type === "visit";
+                      const outcomeChip = (() => {
+                        if (!isVisit) return null;
+                        const map = {
+                          applied:     { label: "Applied",     bg: "oklch(0.94 0.06 150)", color: "oklch(0.45 0.1 150)" },
+                          considering: { label: "Considering", bg: "oklch(0.96 0.02 80)",  color: "var(--accent)" },
+                          passed:      { label: "Passed",      bg: "var(--rule)",          color: "var(--ink-soft)" },
+                          no_show:     { label: "No-show",     bg: "var(--rule)",          color: "var(--ink-soft)" },
+                        };
+                        const m = map[b.outcome];
+                        if (!m) return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] bg-paper border border-rule text-[color:var(--muted)]">Visited</span>;
+                        return <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium" style={{ background: m.bg, color: m.color }}>{m.label}</span>;
+                      })();
+                      return (
+                        <div
+                          key={b._id}
+                          className={`px-6 py-5 grid grid-cols-1 md:grid-cols-[1.5fr_1fr_auto_auto] gap-5 items-center ${
+                            i !== past.length - 1 ? "border-b border-rule" : ""
+                          }`}
+                        >
+                          <div>
+                            <div className="font-medium flex items-center gap-2 flex-wrap">
+                              {b.property?.title || "Property"}
+                              {outcomeChip}
+                            </div>
+                            <div className="text-[12px] text-[color:var(--muted)]">{b.property?.location?.locality}</div>
+                          </div>
+                          <div className="text-[13px] text-[color:var(--muted)]">
+                            {isVisit
+                              ? `Visited ${formatDate(b.visitDate || b.completedAt || b.createdAt)}`
+                              : `${formatDate(b.checkIn || b.createdAt)}${b.checkOut ? ` – ${formatDate(b.checkOut)}` : ""}`}
+                          </div>
+                          <div className="text-[13px] text-[color:var(--muted)]">
+                            {!isVisit && b.priceQuoted ? fmtINR(b.priceQuoted) : ""}
+                          </div>
+                          <div>
+                            {isVisit && b.outcome === "considering" ? (
+                              <button
+                                onClick={() => setApplyTarget({ property: b.property, visitId: b._id })}
+                                className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-ink text-paper text-[13px] font-medium hover:bg-accent transition"
+                              >
+                                Apply now
+                              </button>
+                            ) : !isVisit ? (
+                              <button className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-card border border-rule text-[13px] hover:border-ink transition">
+                                Write a review
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                        <div className="text-[13px] text-[color:var(--muted)]">
-                          {formatDate(b.checkIn || b.createdAt)}
-                          {b.checkOut ? ` – ${formatDate(b.checkOut)}` : ""}
-                        </div>
-                        <div className="text-[13px] text-[color:var(--muted)]">
-                          {b.priceQuoted ? fmtINR(b.priceQuoted) : "—"}
-                        </div>
-                        <div>
-                          <button className="inline-flex items-center px-3.5 py-1.5 rounded-full bg-card border border-rule text-[13px] hover:border-ink transition">
-                            Write a review
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </section>
@@ -648,6 +783,48 @@ export default function MyBookings() {
           } catch (e) { /* ignore */ }
         }}
       />
+
+      {/* Apply-to-rent flow after a "Loved it" or "Considering → Apply now" outcome */}
+      {applyTarget && (
+        <RentalApplicationModal
+          open={!!applyTarget}
+          property={applyTarget.property}
+          onClose={() => setApplyTarget(null)}
+          onSubmitted={() => { setApplyTarget(null); toast.success("Application sent."); }}
+        />
+      )}
+
+      {/* "Tell us why" modal for the Pass outcome */}
+      {outcomeTarget && (
+        <div className="fixed inset-0 z-50 bg-ink/50 backdrop-blur-sm grid place-items-center px-4" onClick={() => setOutcomeTarget(null)}>
+          <div className="bg-card w-full max-w-md rounded-3xl p-6 shadow-card-hover" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-[22px]">Anything you'd like the owner to know?</h3>
+            <p className="text-[13px] text-[color:var(--muted)] mt-1">Optional — helps them improve the listing.</p>
+            <textarea
+              rows={3}
+              value={outcomeNote}
+              onChange={(e) => setOutcomeNote(e.target.value)}
+              placeholder="Smaller than expected, no natural light…"
+              className="mt-4 w-full rounded-xl border border-rule bg-card px-3 py-2.5 text-[14px] focus:outline-none focus:border-ink resize-none"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => { submitVisitOutcome(outcomeTarget.id, "passed"); setOutcomeTarget(null); }}
+                className="inline-flex items-center px-5 py-2.5 rounded-full bg-card border border-rule text-ink text-sm hover:border-ink transition"
+              >
+                Skip
+              </button>
+              <button
+                onClick={() => { submitVisitOutcome(outcomeTarget.id, "passed", outcomeNote); setOutcomeTarget(null); }}
+                disabled={savingOutcome}
+                className="inline-flex items-center px-5 py-2.5 rounded-full bg-ink text-paper text-sm font-medium hover:bg-accent transition disabled:opacity-50"
+              >
+                Send feedback
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Issue detail drawer (tenant) */}
       {issueDetail && (
